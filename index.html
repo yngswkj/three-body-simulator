@@ -600,6 +600,10 @@
         // ★ 追加：衝突判定フラグ
         let enableCollisions = true;
 
+        // ★ 追加：ブラックホール関連定数
+        const BLACK_HOLE_MASS_THRESHOLD = 200; // ブラックホール化する質量の閾値
+        const BLACK_HOLE_GRAVITY_MULTIPLIER = 3; // ブラックホールの重力倍率
+
         // 星の背景用変数
         let stars = [];
         let backgroundGenerated = false;
@@ -709,7 +713,7 @@
 
                 // 質量（10-50の範囲に制限、重力計算と天体サイズに影響）
                 // 大きいほど：重力が強い、他の天体を引きつけやすい、描画サイズが大きい
-                this.mass = Math.max(10, Math.min(50, mass));
+                this.mass = Math.max(10, Math.min(200, mass)); // ★ 変更：最大質量を増加
 
                 // === 視覚効果パラメータ ===
                 this.trail = [];           // 軌跡データの配列（過去の位置を記録）
@@ -720,6 +724,44 @@
                 this.isValid = true;          // 天体の有効性フラグ（falseで削除対象）
                 this.pulsePhase = Math.random() * Math.PI * 2; // 脈動効果の位相（0-2π、光の明滅リズム）
                 this.particleTimer = 0;       // パーティクル生成タイミングの制御カウンタ
+
+                // ★ 追加：ブラックホール関連
+                this.isBlackHole = this.mass >= BLACK_HOLE_MASS_THRESHOLD;
+                this.blackHoleRotation = 0; // ブラックホールの回転角度
+                this.eventHorizonRadius = 0; // 事象の地平線の半径
+
+                if (this.isBlackHole) {
+                    this.becomeBlackHole();
+                }
+            }
+
+            // ★ 追加：ブラックホール化処理
+            becomeBlackHole() {
+                this.isBlackHole = true;
+                this.color = '#000000'; // 黒色に変更
+                this.eventHorizonRadius = Math.sqrt(this.mass) * 2;
+                console.log(`ブラックホール誕生！質量: ${this.mass.toFixed(1)}`);
+
+                // ブラックホール誕生エフェクト
+                this.createBlackHoleBirthEffect();
+            }
+
+            // ★ 追加：ブラックホール誕生エフェクト
+            createBlackHoleBirthEffect() {
+                for (let i = 0; i < 50; i++) {
+                    const angle = (Math.PI * 2 * i) / 50;
+                    const speed = 5 + Math.random() * 8;
+                    const distance = 20 + Math.random() * 30;
+                    const px = this.x + Math.cos(angle) * distance;
+                    const py = this.y + Math.sin(angle) * distance;
+
+                    const particle = new Particle(px, py, '#ffffff');
+                    particle.vx = Math.cos(angle) * speed;
+                    particle.vy = Math.sin(angle) * speed;
+                    particle.life = 2.0;
+                    particle.size = 3 + Math.random() * 4;
+                    particles.push(particle);
+                }
             }
 
             generateColor() {
@@ -737,6 +779,17 @@
              */
             update(dt) {
                 try {
+                    // ★ 追加：ブラックホール化チェック
+                    if (!this.isBlackHole && this.mass >= BLACK_HOLE_MASS_THRESHOLD) {
+                        this.becomeBlackHole();
+                    }
+
+                    // ★ 追加：ブラックホールの回転更新
+                    if (this.isBlackHole) {
+                        this.blackHoleRotation += 0.02;
+                        this.eventHorizonRadius = Math.sqrt(this.mass) * 2;
+                    }
+
                     // 軌道記録（パフォーマンス最適化）
                     this.trailUpdateCounter++;
                     if (this.trailUpdateCounter % 3 === 0 && showTrails) {
@@ -773,15 +826,23 @@
                     // 脈動効果の更新
                     this.pulsePhase += 0.05;
 
-                    // パーティクル生成
+                    // パーティクル生成（ブラックホールは特殊エフェクト）
                     this.particleTimer++;
-                    if (this.particleTimer % 15 === 0 && Math.random() < 0.3) {
-                        const radius = Math.sqrt(this.mass) * 1.5;
-                        const angle = Math.random() * Math.PI * 2;
-                        const distance = radius + Math.random() * 10;
-                        const px = this.x + Math.cos(angle) * distance;
-                        const py = this.y + Math.sin(angle) * distance;
-                        particles.push(new Particle(px, py, this.color));
+                    if (this.isBlackHole) {
+                        // ブラックホール用パーティクル（吸い込みエフェクト）
+                        if (this.particleTimer % 8 === 0) {
+                            this.createAccretionDiskParticle();
+                        }
+                    } else {
+                        // 通常天体用パーティクル
+                        if (this.particleTimer % 15 === 0 && Math.random() < 0.3) {
+                            const radius = Math.sqrt(this.mass) * 1.5;
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = radius + Math.random() * 10;
+                            const px = this.x + Math.cos(angle) * distance;
+                            const py = this.y + Math.sin(angle) * distance;
+                            particles.push(new Particle(px, py, this.color));
+                        }
                     }
 
                     // 異常値チェック
@@ -794,6 +855,23 @@
                     console.warn('Body update error:', error);
                     this.isValid = false;
                 }
+            }
+
+            // ★ 追加：降着円盤パーティクル生成
+            createAccretionDiskParticle() {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = this.eventHorizonRadius * (2 + Math.random() * 3);
+                const px = this.x + Math.cos(angle) * radius;
+                const py = this.y + Math.sin(angle) * radius;
+
+                // パーティクルを中心に向かって螺旋状に移動
+                const particle = new Particle(px, py, '#ff6b00');
+                const spiralSpeed = 0.5;
+                particle.vx = -Math.cos(angle) * spiralSpeed + Math.sin(angle) * spiralSpeed * 0.3;
+                particle.vy = -Math.sin(angle) * spiralSpeed - Math.cos(angle) * spiralSpeed * 0.3;
+                particle.life = 3.0;
+                particle.size = 1 + Math.random() * 2;
+                particles.push(particle);
             }
 
             /**
@@ -827,75 +905,137 @@
                         }
                     }
 
-                    // 天体描画
-                    const baseRadius = Math.sqrt(this.mass) * 1.5;
-                    const pulseMultiplier = 1 + Math.sin(this.pulsePhase) * 0.1;
-                    const radius = baseRadius * pulseMultiplier;
-
-                    // 外側のオーラ（複数層）
-                    for (let layer = 3; layer >= 1; layer--) {
-                        const auraRadius = radius * (2 + layer * 0.8);
-                        const auraGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, auraRadius);
-                        const intensity = 0.1 / layer;
-                        auraGradient.addColorStop(0, this.color + Math.floor(intensity * 255).toString(16).padStart(2, '0'));
-                        auraGradient.addColorStop(0.5, this.color + Math.floor(intensity * 128).toString(16).padStart(2, '0'));
-                        auraGradient.addColorStop(1, 'transparent');
-
-                        ctx.fillStyle = auraGradient;
-                        ctx.beginPath();
-                        ctx.arc(this.x, this.y, auraRadius, 0, Math.PI * 2);
-                        ctx.fill();
+                    // ★ 変更：ブラックホールと通常天体で描画を分岐
+                    if (this.isBlackHole) {
+                        this.drawBlackHole();
+                    } else {
+                        this.drawNormalBody();
                     }
-
-                    // メインの光輪
-                    const glowGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius * 2);
-                    glowGradient.addColorStop(0, this.color + 'AA');
-                    glowGradient.addColorStop(0.6, this.color + '44');
-                    glowGradient.addColorStop(1, 'transparent');
-                    ctx.fillStyle = glowGradient;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, radius * 2, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // コア部分（複数層のグラデーション）
-                    const coreGradient = ctx.createRadialGradient(
-                        this.x - radius * 0.3, this.y - radius * 0.3, 0,
-                        this.x, this.y, radius
-                    );
-                    coreGradient.addColorStop(0, '#ffffff');
-                    coreGradient.addColorStop(0.2, '#ffffff');
-                    coreGradient.addColorStop(0.4, this.color);
-                    coreGradient.addColorStop(0.7, this.color + 'CC');
-                    coreGradient.addColorStop(1, this.color + '88');
-
-                    ctx.fillStyle = coreGradient;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // 内側のエネルギーコア
-                    const energyGradient = ctx.createRadialGradient(
-                        this.x - radius * 0.2, this.y - radius * 0.2, 0,
-                        this.x, this.y, radius * 0.6
-                    );
-                    energyGradient.addColorStop(0, '#ffffff');
-                    energyGradient.addColorStop(0.5, this.color + 'DD');
-                    energyGradient.addColorStop(1, 'transparent');
-
-                    ctx.fillStyle = energyGradient;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, radius * 0.6, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // スペキュラハイライト
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                    ctx.beginPath();
-                    ctx.arc(this.x - radius * 0.4, this.y - radius * 0.4, radius * 0.25, 0, Math.PI * 2);
-                    ctx.fill();
 
                 } catch (error) {
                     console.warn('Body draw error:', error);
                 }
+            }
+
+            // ★ 追加：ブラックホール描画
+            drawBlackHole() {
+                const radius = this.eventHorizonRadius;
+
+                // 降着円盤の描画
+                for (let ring = 4; ring >= 1; ring--) {
+                    const ringRadius = radius * (2 + ring * 0.5);
+                    const ringGradient = ctx.createRadialGradient(this.x, this.y, radius, this.x, this.y, ringRadius);
+
+                    const intensity = 0.3 / ring;
+                    const rotation = this.blackHoleRotation * ring * 0.5;
+
+                    ringGradient.addColorStop(0, 'transparent');
+                    ringGradient.addColorStop(0.3, `rgba(255, 107, 0, ${intensity})`);
+                    ringGradient.addColorStop(0.7, `rgba(255, 69, 0, ${intensity * 0.7})`);
+                    ringGradient.addColorStop(1, 'transparent');
+
+                    ctx.fillStyle = ringGradient;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, ringRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 重力レンズ効果（歪み表現）
+                const lensRadius = radius * 4;
+                const lensGradient = ctx.createRadialGradient(this.x, this.y, radius, this.x, this.y, lensRadius);
+                lensGradient.addColorStop(0, 'transparent');
+                lensGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.05)');
+                lensGradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.1)');
+                lensGradient.addColorStop(1, 'transparent');
+
+                ctx.fillStyle = lensGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, lensRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 事象の地平線（完全な黒）
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 事象の地平線の境界
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // ★ 追加：通常天体描画（既存のdraw内容を移動）
+            drawNormalBody() {
+                // 天体描画
+                const baseRadius = Math.sqrt(this.mass) * 1.5;
+                const pulseMultiplier = 1 + Math.sin(this.pulsePhase) * 0.1;
+                const radius = baseRadius * pulseMultiplier;
+
+                // 外側のオーラ（複数層）
+                for (let layer = 3; layer >= 1; layer--) {
+                    const auraRadius = radius * (2 + layer * 0.8);
+                    const auraGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, auraRadius);
+                    const intensity = 0.1 / layer;
+                    auraGradient.addColorStop(0, this.color + Math.floor(intensity * 255).toString(16).padStart(2, '0'));
+                    auraGradient.addColorStop(0.5, this.color + Math.floor(intensity * 128).toString(16).padStart(2, '0'));
+                    auraGradient.addColorStop(1, 'transparent');
+
+                    ctx.fillStyle = auraGradient;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, auraRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // メインの光輪
+                const glowGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius * 2);
+                glowGradient.addColorStop(0, this.color + 'AA');
+                glowGradient.addColorStop(0.6, this.color + '44');
+                glowGradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = glowGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius * 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // コア部分（複数層のグラデーション）
+                const coreGradient = ctx.createRadialGradient(
+                    this.x - radius * 0.3, this.y - radius * 0.3, 0,
+                    this.x, this.y, radius
+                );
+                coreGradient.addColorStop(0, '#ffffff');
+                coreGradient.addColorStop(0.2, '#ffffff');
+                coreGradient.addColorStop(0.4, this.color);
+                coreGradient.addColorStop(0.7, this.color + 'CC');
+                coreGradient.addColorStop(1, this.color + '88');
+
+                ctx.fillStyle = coreGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 内側のエネルギーコア
+                const energyGradient = ctx.createRadialGradient(
+                    this.x - radius * 0.2, this.y - radius * 0.2, 0,
+                    this.x, this.y, radius * 0.6
+                );
+                energyGradient.addColorStop(0, '#ffffff');
+                energyGradient.addColorStop(0.5, this.color + 'DD');
+                energyGradient.addColorStop(1, 'transparent');
+
+                ctx.fillStyle = energyGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // スペキュラハイライト
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.arc(this.x - radius * 0.4, this.y - radius * 0.4, radius * 0.25, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
 
@@ -941,7 +1081,7 @@
                         survivor.y = newY;
                         survivor.vx = newVx;
                         survivor.vy = newVy;
-                        survivor.mass = Math.min(totalMass, 80); // 最大質量制限
+                        survivor.mass = Math.min(totalMass, 200); // 最大質量制限
                         survivor.trail = []; // 軌跡をリセット
 
                         // 衝突エフェクト生成
@@ -1014,8 +1154,14 @@
                         const softening = 100;  // より大きなソフトニング値
                         const dist = Math.sqrt(distSq + softening);
 
+                        // ★ 変更：ブラックホールの重力を強化
+                        let effectiveG = G;
+                        if (bodies[j].isBlackHole) {
+                            effectiveG *= BLACK_HOLE_GRAVITY_MULTIPLIER;
+                        }
+
                         // 重力の大きさ
-                        const F = G * bodies[i].mass * bodies[j].mass / (dist * dist);
+                        const F = effectiveG * bodies[i].mass * bodies[j].mass / (dist * dist);
 
                         // 方向を正規化して力を分解
                         fx += F * dx / dist;
@@ -1142,11 +1288,19 @@
          */
         function updateDisplay() {
             try {
-                document.getElementById('bodyCount').textContent = bodies.filter(b => b.isValid).length;
+                const validBodies = bodies.filter(b => b.isValid);
+                const blackHoleCount = validBodies.filter(b => b.isBlackHole).length;
+
+                document.getElementById('bodyCount').textContent = validBodies.length;
                 document.getElementById('timeDisplay').textContent = Math.floor(time);
 
                 const energy = calculateEnergy();
                 document.getElementById('energyDisplay').textContent = energy.toFixed(0);
+
+                // ★ 追加：ブラックホール情報を表示
+                if (blackHoleCount > 0) {
+                    document.getElementById('bodyCount').textContent += ` (BH:${blackHoleCount})`;
+                }
 
             } catch (error) {
                 console.warn('Display update error:', error);
