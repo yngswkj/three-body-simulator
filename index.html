@@ -845,6 +845,97 @@
         }
 
         /**
+         * 天体衝突の検出と処理
+         */
+        function handleCollisions() {
+            for (let i = 0; i < bodies.length; i++) {
+                for (let j = i + 1; j < bodies.length; j++) {
+                    if (!bodies[i].isValid || !bodies[j].isValid) continue;
+
+                    const dx = bodies[j].x - bodies[i].x;
+                    const dy = bodies[j].y - bodies[i].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // 衝突判定：半径の合計よりも近い場合
+                    const radius1 = Math.sqrt(bodies[i].mass) * 1.5;
+                    const radius2 = Math.sqrt(bodies[j].mass) * 1.5;
+                    const collisionDistance = (radius1 + radius2) * 0.8; // 少し重なりを許容
+
+                    if (distance < collisionDistance) {
+                        // 質量の大きい方を残す（質量が同じ場合はi番目を残す）
+                        let survivor, victim;
+                        if (bodies[i].mass >= bodies[j].mass) {
+                            survivor = bodies[i];
+                            victim = bodies[j];
+                        } else {
+                            survivor = bodies[j];
+                            victim = bodies[i];
+                        }
+
+                        // 運動量保存の法則で新しい速度を計算
+                        const totalMass = survivor.mass + victim.mass;
+                        const newVx = (survivor.mass * survivor.vx + victim.mass * victim.vx) / totalMass;
+                        const newVy = (survivor.mass * survivor.vy + victim.mass * victim.vy) / totalMass;
+
+                        // 質量の重心で新しい位置を計算
+                        const newX = (survivor.mass * survivor.x + victim.mass * victim.x) / totalMass;
+                        const newY = (survivor.mass * survivor.y + victim.mass * victim.y) / totalMass;
+
+                        // 生存者の属性を更新
+                        survivor.x = newX;
+                        survivor.y = newY;
+                        survivor.vx = newVx;
+                        survivor.vy = newVy;
+                        survivor.mass = Math.min(totalMass, 80); // 最大質量制限
+                        survivor.trail = []; // 軌跡をリセット
+
+                        // 衝突エフェクト生成
+                        createCollisionEffect(newX, newY, survivor.color, victim.color);
+
+                        // 被害者を無効化
+                        victim.isValid = false;
+
+                        console.log(`天体衝突: 質量 ${survivor.mass.toFixed(1)} の新天体が生成されました`);
+                        return; // 1フレームに1回の衝突のみ処理
+                    }
+                }
+            }
+        }
+
+        /**
+         * 衝突エフェクトの生成
+         */
+        function createCollisionEffect(x, y, color1, color2) {
+            // 多数のパーティクルを生成
+            for (let i = 0; i < 20; i++) {
+                const angle = (Math.PI * 2 * i) / 20;
+                const speed = 3 + Math.random() * 4;
+                const px = x + Math.cos(angle) * 10;
+                const py = y + Math.sin(angle) * 10;
+
+                // 両方の色からランダムに選択
+                const effectColor = Math.random() < 0.5 ? color1 : color2;
+
+                const particle = new Particle(px, py, effectColor);
+                particle.vx = Math.cos(angle) * speed;
+                particle.vy = Math.sin(angle) * speed;
+                particle.life = 1.5; // 通常より長持ち
+                particle.size = 2 + Math.random() * 3;
+                particles.push(particle);
+            }
+
+            // 中心部の明るいフラッシュ
+            for (let i = 0; i < 5; i++) {
+                const particle = new Particle(x, y, '#ffffff');
+                particle.vx = (Math.random() - 0.5) * 2;
+                particle.vy = (Math.random() - 0.5) * 2;
+                particle.life = 1.0;
+                particle.size = 4 + Math.random() * 2;
+                particles.push(particle);
+            }
+        }
+
+        /**
          * 改良された重力計算（より現実的な相互作用）
          */
         function calculateGravity(dt) {
@@ -888,6 +979,10 @@
                         bodies[i].vy = (bodies[i].vy / speed) * maxSpeed;
                     }
                 }
+
+                // ★ 追加：衝突検出と処理
+                handleCollisions();
+
             } catch (err) {
                 console.error('Gravity calculation error:', err);
             }
