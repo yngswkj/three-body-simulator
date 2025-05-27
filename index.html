@@ -403,10 +403,42 @@
 
         /* ★ 追加：大画面用のメディアクエリ */
         @media (min-width: 768px) {
+            .header {
+                /* ヘッダーは大画面でも上部に固定 */
+                flex-shrink: 0;
+            }
+
+            .container {
+                /* コンテナは縦方向のまま */
+                flex-direction: column;
+            }
+
+            /* 新しいコンテナでcanvasとcontrolsを横並びに */
+            .main-content {
+                display: flex;
+                flex-direction: row;
+                flex: 1;
+                overflow: hidden;
+            }
+
+            .canvas-container {
+                flex: 1;
+                min-height: calc(100vh - 120px);
+                /* ヘッダー分を除いた高さ */
+            }
+
             .controls {
+                width: 380px;
+                /* 固定幅 */
+                max-height: calc(100vh - 120px);
+                /* ヘッダー分を除いた高さ */
                 padding: 20px;
-                max-height: 35vh;
-                /* 大画面では少し小さく */
+                border-top: none;
+                /* 上ボーダーを削除 */
+                border-left: 1px solid rgba(255, 255, 255, 0.1);
+                /* 左ボーダーを追加 */
+                box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
+                /* 左側シャドウ */
             }
 
             .main-controls {
@@ -437,8 +469,8 @@
         /* ★ 追加：超大画面用の調整 */
         @media (min-width: 1200px) {
             .controls {
-                max-height: 30vh;
-                /* 超大画面では更に小さく */
+                width: 380px;
+                /* 超大画面では幅を少し広く */
             }
         }
     </style>
@@ -454,75 +486,87 @@
             </div>
         </div>
 
-        <div class="canvas-container">
-            <canvas id="canvas"></canvas>
-            <div class="info">
-                <div class="info-row">
-                    <span class="info-label">天体数</span>
-                    <span class="info-value" id="bodyCount">0</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">時間</span>
-                    <span class="info-value" id="timeDisplay">0</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">エネルギー</span>
-                    <span class="info-value" id="energyDisplay">0</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">FPS</span>
-                    <span class="info-value" id="fpsDisplay">60</span>
-                </div>
-            </div>
-            <div class="error-message" id="errorMessage">
-                シミュレーションが不安定になりました。リセットしてください。
-            </div>
-        </div>
-
-        <div class="controls">
-            <div class="main-controls">
-                <button id="playPause">開始</button>
-                <button id="reset">リセット</button>
-                <button id="clear">クリア</button>
-            </div>
-
-            <div class="control-section">
-                <div class="section-title">シミュレーション設定</div>
-                <div class="slider-row">
-                    <span class="slider-label">速度</span>
-                    <div class="slider-container">
-                        <input type="range" id="speedSlider" class="slider" min="1" max="5" step="0.1" value="1.0">
-                        <span class="value-display" id="speedValue">1.0</span>
+        <!-- ★ 追加：大画面用のメインコンテンツラッパー -->
+        <div class="main-content">
+            <div class="canvas-container">
+                <canvas id="canvas"></canvas>
+                <div class="info">
+                    <div class="info-row">
+                        <span class="info-label">天体数</span>
+                        <span class="info-value" id="bodyCount">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">時間</span>
+                        <span class="info-value" id="timeDisplay">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">エネルギー</span>
+                        <span class="info-value" id="energyDisplay">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">FPS</span>
+                        <span class="info-value" id="fpsDisplay">60</span>
                     </div>
                 </div>
-                <div class="slider-row">
-                    <span class="slider-label">重力</span>
-                    <div class="slider-container">
-                        <input type="range" id="gravitySlider" class="slider" min="50" max="300" step="25" value="150">
-                        <span class="value-display" id="gravityValue">150</span>
-                    </div>
+                <div class="error-message" id="errorMessage">
+                    シミュレーションが不安定になりました。リセットしてください。
                 </div>
             </div>
 
-            <div class="control-section">
-                <div class="section-title">軌跡設定</div>
-                <div class="trail-controls">
-                    <button class="trail-toggle active" id="trailToggle">軌跡表示</button>
-                    <div class="slider-container">
-                        <span class="slider-label">長さ</span>
-                        <input type="range" id="trailSlider" class="slider" min="10" max="100" step="10" value="30">
-                        <span class="value-display" id="trailValue">30</span>
+            <div class="controls">
+                <div class="main-controls">
+                    <button id="playPause">開始</button>
+                    <button id="reset">リセット</button>
+                    <button id="clear">クリア</button>
+                </div>
+
+                <div class="control-section">
+                    <div class="section-title">シミュレーション設定</div>
+                    <div class="slider-row">
+                        <span class="slider-label">速度</span>
+                        <div class="slider-container">
+                            <input type="range" id="speedSlider" class="slider" min="1" max="5" step="0.1" value="1.0">
+                            <span class="value-display" id="speedValue">1.0</span>
+                        </div>
+                    </div>
+                    <div class="slider-row">
+                        <span class="slider-label">重力</span>
+                        <div class="slider-container">
+                            <input type="range" id="gravitySlider" class="slider" min="50" max="300" step="25"
+                                value="150">
+                            <span class="value-display" id="gravityValue">150</span>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="control-section">
-                <div class="section-title">プリセット配置</div>
-                <div class="preset-buttons">
-                    <button class="preset-btn" onclick="setPreset('binary')">連星系</button>
-                    <button class="preset-btn" onclick="setPreset('triangle')">三角配置</button>
-                    <button class="preset-btn" onclick="setPreset('figure_eight')">8の字軌道</button>
-                    <button class="preset-btn" onclick="setPreset('random')">ランダム</button>
+                <div class="control-section">
+                    <div class="section-title">軌跡設定</div>
+                    <div class="trail-controls">
+                        <button class="trail-toggle active" id="trailToggle">軌跡表示</button>
+                        <div class="slider-container">
+                            <span class="slider-label">長さ</span>
+                            <input type="range" id="trailSlider" class="slider" min="10" max="100" step="10" value="30">
+                            <span class="value-display" id="trailValue">30</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ★ 追加：衝突設定セクション -->
+                <div class="control-section">
+                    <div class="section-title">衝突設定</div>
+                    <div class="trail-controls">
+                        <button class="trail-toggle active" id="collisionToggle">衝突有効</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <div class="section-title">プリセット配置</div>
+                    <div class="preset-buttons">
+                        <button class="preset-btn" onclick="setPreset('binary')">連星系</button>
+                        <button class="preset-btn" onclick="setPreset('triangle')">三角配置</button>
+                        <button class="preset-btn" onclick="setPreset('figure_eight')">8の字軌道</button>
+                        <button class="preset-btn" onclick="setPreset('random')">ランダム</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -552,6 +596,9 @@
         let trailLength = 30;
         let showTrails = true;
         let errorCount = 0;
+
+        // ★ 追加：衝突判定フラグ
+        let enableCollisions = true;
 
         // 星の背景用変数
         let stars = [];
@@ -654,17 +701,25 @@
          */
         class Body {
             constructor(x, y, vx = 0, vy = 0, mass = 25) {
-                this.x = x;
-                this.y = y;
-                this.vx = vx;
-                this.vy = vy;
-                this.mass = Math.max(10, Math.min(50, mass)); // 質量制限
-                this.trail = [];
-                this.color = this.generateColor();
-                this.trailUpdateCounter = 0;
-                this.isValid = true;
-                this.pulsePhase = Math.random() * Math.PI * 2; // 脈動効果用
-                this.particleTimer = 0;
+                // === 基本物理パラメータ ===
+                this.x = x;      // X座標（ピクセル単位での画面上の位置）
+                this.y = y;      // Y座標（ピクセル単位での画面上の位置）
+                this.vx = vx;    // X方向の速度（ピクセル/フレーム、運動の勢いを表す）
+                this.vy = vy;    // Y方向の速度（ピクセル/フレーム、運動の勢いを表す）
+
+                // 質量（10-50の範囲に制限、重力計算と天体サイズに影響）
+                // 大きいほど：重力が強い、他の天体を引きつけやすい、描画サイズが大きい
+                this.mass = Math.max(10, Math.min(50, mass));
+
+                // === 視覚効果パラメータ ===
+                this.trail = [];           // 軌跡データの配列（過去の位置を記録）
+                this.color = this.generateColor(); // 天体の色（ランダムに生成される16色から選択）
+
+                // === アニメーション制御パラメータ ===
+                this.trailUpdateCounter = 0;  // 軌跡更新の間隔制御（パフォーマンス最適化用）
+                this.isValid = true;          // 天体の有効性フラグ（falseで削除対象）
+                this.pulsePhase = Math.random() * Math.PI * 2; // 脈動効果の位相（0-2π、光の明滅リズム）
+                this.particleTimer = 0;       // パーティクル生成タイミングの制御カウンタ
             }
 
             generateColor() {
@@ -980,8 +1035,10 @@
                     }
                 }
 
-                // ★ 追加：衝突検出と処理
-                handleCollisions();
+                // ★ 変更：衝突判定の条件追加
+                if (enableCollisions) {
+                    handleCollisions();
+                }
 
             } catch (err) {
                 console.error('Gravity calculation error:', err);
@@ -1189,6 +1246,14 @@
             }
         });
 
+        // ★ 追加：衝突判定切り替えイベント
+        document.getElementById('collisionToggle').addEventListener('click', () => {
+            enableCollisions = !enableCollisions;
+            const btn = document.getElementById('collisionToggle');
+            btn.classList.toggle('active', enableCollisions);
+            btn.textContent = enableCollisions ? '衝突有効' : '衝突無効';
+        });
+
         // プリセット（初期速度を調整）
         function setPreset(type) {
             try {
@@ -1224,9 +1289,9 @@
 
                     case 'figure_eight':
                         // 8の字軌道（近似値）
-                        bodies.push(new Body(cx - 60, cy, 15, 25, 25));
-                        bodies.push(new Body(cx + 60, cy, 15, 25, 25));
-                        bodies.push(new Body(cx, cy - 80, -30, -50, 25));
+                        bodies.push(new Body(cx, cy, 22.48326573, 34.50536957, 25));
+                        bodies.push(new Body(cx - 160, cy, -11.24163287, -17.25268479, 25));
+                        bodies.push(new Body(cx + 160, cy, -11.24163287, -17.25268479, 25));
                         break;
 
                     case 'random':
