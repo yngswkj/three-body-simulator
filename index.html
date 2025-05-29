@@ -609,8 +609,14 @@
         let enableCollisions = true;
 
         // ★ 追加：ブラックホール関連定数
-        const BLACK_HOLE_MASS_THRESHOLD = 200; // ブラックホール化する質量の閾値
+        const BLACK_HOLE_MASS_THRESHOLD = 300; // ★ 変更：ブラックホール化する質量の閾値を厳しく（200→300）
         const BLACK_HOLE_GRAVITY_MULTIPLIER = 3; // ブラックホールの重力倍率
+
+        // ★ 追加：新しい天体タイプの閾値
+        const WHITE_DWARF_MASS_THRESHOLD = 80;   // 白色矮星化する質量の閾値
+        const PULSAR_MASS_THRESHOLD = 120;       // パルサー化する質量の閾値
+        const NEUTRON_STAR_MASS_THRESHOLD = 150; // 中性子星化する質量の閾値
+        const PLANET_SYSTEM_MASS_THRESHOLD = 200; // 惑星系化する質量の閾値
 
         // ★ 追加：重力場可視化関連
         let showGravityField = false;
@@ -939,37 +945,131 @@
         }
 
         /**
-         * 天体クラス（神秘的な見た目に改良）
+         * 天体クラス
          */
         class Body {
             constructor(x, y, vx = 0, vy = 0, mass = 25) {
-                // === 基本物理パラメータ ===
-                this.x = x;      // X座標（ピクセル単位での画面上の位置）
-                this.y = y;      // Y座標（ピクセル単位での画面上の位置）
-                this.vx = vx;    // X方向の速度（ピクセル/フレーム、運動の勢いを表す）
-                this.vy = vy;    // Y方向の速度（ピクセル/フレーム、運動の勢いを表す）
+                // 基本物理パラメータ
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.mass = Math.max(10, Math.min(400, mass));
 
-                // 質量（10-50の範囲に制限、重力計算と天体サイズに影響）
-                // 大きいほど：重力が強い、他の天体を引きつけやすい、描画サイズが大きい
-                this.mass = Math.max(10, Math.min(200, mass)); // ★ 変更：最大質量を増加
+                // 視覚効果パラメータ
+                this.trail = [];
+                this.color = this.generateColor(); // ★ 修正：generatePlanetColor → generateColor
 
-                // === 視覚効果パラメータ ===
-                this.trail = [];           // 軌跡データの配列（過去の位置を記録）
-                this.color = this.generateColor(); // 天体の色（ランダムに生成される16色から選択）
+                // アニメーション制御パラメータ
+                this.trailUpdateCounter = 0;
+                this.isValid = true;
+                this.pulsePhase = Math.random() * Math.PI * 2;
+                this.particleTimer = 0;
 
-                // === アニメーション制御パラメータ ===
-                this.trailUpdateCounter = 0;  // 軌跡更新の間隔制御（パフォーマンス最適化用）
-                this.isValid = true;          // 天体の有効性フラグ（falseで削除対象）
-                this.pulsePhase = Math.random() * Math.PI * 2; // 脈動効果の位相（0-2π、光の明滅リズム）
-                this.particleTimer = 0;       // パーティクル生成タイミングの制御カウンタ
+                // 天体タイプ別パラメータ
+                this.type = this.determineBodyType();
+                this.rotation = 0;
+                this.temperature = 1.0;
+                this.magneticField = 0;
+                this.beamRotation = 0;
+                this.planets = [];
 
-                // ★ 追加：ブラックホール関連
-                this.isBlackHole = this.mass >= BLACK_HOLE_MASS_THRESHOLD;
-                this.blackHoleRotation = 0; // ブラックホールの回転角度
-                this.eventHorizonRadius = 0; // 事象の地平線の半径
+                // ブラックホール関連
+                this.isBlackHole = this.type === 'blackHole';
+                this.blackHoleRotation = 0;
+                this.eventHorizonRadius = 0;
 
-                if (this.isBlackHole) {
-                    this.becomeBlackHole();
+                this.initializeByType();
+            }
+
+            // ★ 修正：天体タイプ判定ロジックを物理的に正しく
+            determineBodyType() {
+                if (this.mass >= BLACK_HOLE_MASS_THRESHOLD) {
+                    return 'blackHole';
+                } else if (this.mass >= PLANET_SYSTEM_MASS_THRESHOLD) {
+                    return 'planetSystem';
+                } else if (this.mass >= NEUTRON_STAR_MASS_THRESHOLD) {
+                    // ★ 修正：パルサーは若い中性子星の特殊状態
+                    // 既存のパルサーは磁場減衰で中性子星に進化する可能性
+                    if (this.type === 'pulsar') {
+                        // パルサーの磁場減衰チェック（時間経過で中性子星になる）
+                        return this.shouldPulsarDecay() ? 'neutronStar' : 'pulsar';
+                    }
+                    // 新規生成時：10%の確率でパルサー（若い中性子星）
+                    return Math.random() < 0.1 ? 'pulsar' : 'neutronStar';
+                } else if (this.mass >= PULSAR_MASS_THRESHOLD) {
+                    // ★ 修正：この質量範囲では中性子星前駆体
+                    // 激しい衝突や回転エネルギーがある場合のみパルサー化
+                    if (this.hasHighRotationalEnergy()) {
+                        return 'pulsar';
+                    }
+                    return 'neutronStar';
+                } else if (this.mass >= WHITE_DWARF_MASS_THRESHOLD) {
+                    return 'whiteDwarf';
+                } else {
+                    return 'normal';
+                }
+            }
+
+            // ★ 追加：パルサーの磁場減衰判定
+            shouldPulsarDecay() {
+                // 年齢（時間経過）と磁場強度に基づく減衰
+                if (!this.pulsarAge) this.pulsarAge = 0;
+                this.pulsarAge += 1;
+
+                // 磁場強度の減衰（時間と共に減少）
+                this.magneticField = Math.max(0.1, this.magneticField - 0.0001);
+
+                // 磁場が弱くなると通常の中性子星になる
+                // また、一定確率で磁場が完全に減衰
+                return this.magneticField < 0.5 || (this.pulsarAge > 5000 && Math.random() < 0.001);
+            }
+
+            // ★ 追加：高回転エネルギー判定
+            hasHighRotationalEnergy() {
+                // 速度（回転に相当）が高い場合にパルサー化しやすい
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                const rotationalThreshold = 100; // 高速度閾値
+
+                // 最近衝突した場合（質量が急激に増加した場合）
+                const recentCollision = this.lastCollisionTime && (time - this.lastCollisionTime) < 100;
+
+                return speed > rotationalThreshold || recentCollision;
+            }
+
+            // ★ 修正：タイプ別初期化
+            initializeByType() {
+                switch (this.type) {
+                    case 'blackHole':
+                        this.becomeBlackHole();
+                        break;
+                    case 'neutronStar':
+                        this.color = '#E6E6FA'; // 薄紫
+                        this.magneticField = 0.3 + Math.random() * 0.4; // ★ 修正：弱い磁場
+                        this.rotation = 0;
+                        break;
+                    case 'whiteDwarf':
+                        this.color = '#F0F8FF'; // アリスブルー
+                        this.temperature = 2.0; // 高温から開始
+                        break;
+                    case 'pulsar':
+                        this.color = '#00FFFF'; // シアン
+                        this.magneticField = 1.2 + Math.random() * 0.6; // ★ 修正：強い磁場
+                        this.beamRotation = 0;
+                        this.pulsarAge = 0; // ★ 追加：パルサー年齢初期化
+                        this.rotationPeriod = 0.001 + Math.random() * 0.1; // ★ 追加：回転周期（短い）
+                        console.log(`パルサー誕生: 質量 ${this.mass.toFixed(1)}, 磁場強度 ${this.magneticField.toFixed(2)}, 回転周期 ${this.rotationPeriod.toFixed(3)}s`);
+                        break;
+                    case 'planetSystem':
+                        this.color = '#FFD700'; // ゴールド（恒星）
+                        this.generatePlanets();
+                        break;
+                    default:
+                        // 通常星の色を再生成
+                        if (!this.color || this.type === 'normal') {
+                            this.color = this.generateColor();
+                        }
+                        break;
                 }
             }
 
@@ -1002,6 +1102,35 @@
                 }
             }
 
+            // ★ 追加：惑星系の惑星生成
+            generatePlanets() {
+                const planetCount = 2 + Math.floor(Math.random() * 4); // 2-5個の惑星
+                for (let i = 0; i < planetCount; i++) {
+                    const distance = 30 + i * 25 + Math.random() * 20;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.sqrt(this.mass * 0.5 / distance); // ケプラーの法則に基づく軌道速度
+
+                    this.planets.push({
+                        distance: distance,
+                        angle: angle,
+                        speed: speed * (0.8 + Math.random() * 0.4), // 速度にバリエーション
+                        size: 1 + Math.random() * 3,
+                        color: this.generatePlanetColor()
+                    });
+                }
+            }
+
+            // ★ 追加：惑星の色生成（元のgeneratePlanetColorを残す）
+            generatePlanetColor() {
+                const planetColors = [
+                    '#8B4513', '#CD853F', '#DEB887', '#F4A460',
+                    '#4169E1', '#1E90FF', '#87CEEB', '#B0E0E6',
+                    '#FF6347', '#FF4500', '#DC143C', '#B22222'
+                ];
+                return planetColors[Math.floor(Math.random() * planetColors.length)];
+            }
+
+            // ★ 修正：通常星の色生成
             generateColor() {
                 const colors = [
                     '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24',
@@ -1017,16 +1146,17 @@
              */
             update(dt) {
                 try {
-                    // ★ 追加：ブラックホール化チェック
-                    if (!this.isBlackHole && this.mass >= BLACK_HOLE_MASS_THRESHOLD) {
-                        this.becomeBlackHole();
+                    // 天体タイプ変化チェック
+                    const newType = this.determineBodyType();
+                    if (newType !== this.type && this.shouldEvolve(newType)) {
+                        const oldType = this.type;
+                        this.type = newType;
+                        this.initializeByType();
+                        console.log(`天体進化: ${this.getTypeNameJapanese(oldType)} → ${this.getTypeNameJapanese()} (質量: ${this.mass.toFixed(1)})`);
                     }
 
-                    // ★ 追加：ブラックホールの回転更新
-                    if (this.isBlackHole) {
-                        this.blackHoleRotation += 0.02;
-                        this.eventHorizonRadius = Math.sqrt(this.mass) * 2;
-                    }
+                    // タイプ別更新処理
+                    this.updateByType(dt);
 
                     // 軌道記録（パフォーマンス最適化）
                     this.trailUpdateCounter++;
@@ -1037,54 +1167,22 @@
                         }
                     }
 
-                    // 位置更新（dtは既に速度調整済み）
+                    // 位置更新
                     this.x += this.vx * dt;
                     this.y += this.vy * dt;
 
-                    // 境界条件（壁での反射を柔らかく）
-                    const margin = 30;
-                    const damping = 0.8;
-
-                    if (this.x < margin) {
-                        this.x = margin;
-                        this.vx = Math.abs(this.vx) * damping;
-                    } else if (this.x > canvas.width - margin) {
-                        this.x = canvas.width - margin;
-                        this.vx = -Math.abs(this.vx) * damping;
-                    }
-
-                    if (this.y < margin) {
-                        this.y = margin;
-                        this.vy = Math.abs(this.vy) * damping;
-                    } else if (this.y > canvas.height - margin) {
-                        this.y = canvas.height - margin;
-                        this.vy = -Math.abs(this.vy) * damping;
-                    }
+                    // ★ 修正：境界条件処理を改善
+                    this.handleBoundaryConditions();
 
                     // 脈動効果の更新
                     this.pulsePhase += 0.05;
 
-                    // パーティクル生成（ブラックホールは特殊エフェクト）
+                    // パーティクル生成
                     this.particleTimer++;
-                    if (this.isBlackHole) {
-                        // ブラックホール用パーティクル（吸い込みエフェクト）
-                        if (this.particleTimer % 8 === 0) {
-                            this.createAccretionDiskParticle();
-                        }
-                    } else {
-                        // 通常天体用パーティクル
-                        if (this.particleTimer % 15 === 0 && Math.random() < 0.3) {
-                            const radius = Math.sqrt(this.mass) * 1.5;
-                            const angle = Math.random() * Math.PI * 2;
-                            const distance = radius + Math.random() * 10;
-                            const px = this.x + Math.cos(angle) * distance;
-                            const py = this.y + Math.sin(angle) * distance;
-                            particles.push(new Particle(px, py, this.color));
-                        }
-                    }
+                    this.generateParticlesByType();
 
                     // 異常値チェック
-                    if (!isFinite(this.x) || !isFinite(this.y) || !isFinite(this.vx) || !isFinite(this.vy)) {
+                    if (!this.isValidState()) {
                         this.isValid = false;
                         throw new Error('Invalid body state detected');
                     }
@@ -1093,6 +1191,146 @@
                     console.warn('Body update error:', error);
                     this.isValid = false;
                 }
+            }
+
+            // ★ 追加：境界条件処理を独立したメソッドに
+            handleBoundaryConditions() {
+                const margin = 30;
+                const damping = 0.8;
+
+                if (this.x < margin) {
+                    this.x = margin;
+                    this.vx = Math.abs(this.vx) * damping;
+                } else if (this.x > canvas.width - margin) {
+                    this.x = canvas.width - margin;
+                    this.vx = -Math.abs(this.vx) * damping;
+                }
+
+                if (this.y < margin) {
+                    this.y = margin;
+                    this.vy = Math.abs(this.vy) * damping;
+                } else if (this.y > canvas.height - margin) {
+                    this.y = canvas.height - margin;
+                    this.vy = -Math.abs(this.vy) * damping;
+                }
+            }
+
+            // ★ 追加：天体状態の有効性チェック
+            isValidState() {
+                return isFinite(this.x) && isFinite(this.y) &&
+                    isFinite(this.vx) && isFinite(this.vy) &&
+                    this.mass > 0;
+            }
+
+            // ★ 修正：進化条件を簡潔に
+            shouldEvolve(newType) {
+                // ブラックホールは不可逆
+                if (this.type === 'blackHole') return false;
+
+                // より重いタイプへの進化のみ許可
+                const typeOrder = ['normal', 'whiteDwarf', 'pulsar', 'neutronStar', 'planetSystem', 'blackHole'];
+                const currentIndex = typeOrder.indexOf(this.type);
+                const newIndex = typeOrder.indexOf(newType);
+
+                return newIndex > currentIndex || newType === 'blackHole';
+            }
+
+            // ★ 追加：タイプ別更新処理
+            updateByType(dt) {
+                switch (this.type) {
+                    case 'blackHole':
+                        this.blackHoleRotation += 0.02;
+                        this.eventHorizonRadius = Math.sqrt(this.mass) * 2;
+                        break;
+                    case 'neutronStar':
+                        this.rotation += 0.05; // ★ 修正：中性子星の回転は遅め
+                        // 磁場の緩やかな減衰
+                        this.magneticField = Math.max(0.1, this.magneticField - 0.00001);
+                        break;
+                    case 'whiteDwarf':
+                        this.temperature = Math.max(0.2, this.temperature - 0.0001);
+                        break;
+                    case 'pulsar':
+                        // ★ 修正：パルサーの物理的特性を正確に
+                        // 極めて高速回転（ミリ秒パルサーの場合）
+                        this.beamRotation += this.rotationPeriod > 0.01 ? 0.2 : 0.5; // 短周期ほど高速回転
+                        this.rotation += 0.15;
+
+                        // 磁場とスピンの相互作用
+                        if (this.magneticField > 1.0) {
+                            // 強磁場による制動効果（回転減速）
+                            this.rotationPeriod += 0.00001;
+                        }
+
+                        // パルサー年齢の更新
+                        if (!this.pulsarAge) this.pulsarAge = 0;
+                        this.pulsarAge += dt;
+                        break;
+                    case 'planetSystem':
+                        this.planets.forEach(planet => {
+                            planet.angle += planet.speed * dt;
+                        });
+                        break;
+                }
+            }
+
+            // ★ 追加：タイプ別パーティクル生成
+            generateParticlesByType() {
+                const baseInterval = 15;
+                const intervals = {
+                    'blackHole': 8,
+                    'neutronStar': 25,  // ★ 修正：頻度を下げる
+                    'pulsar': 10,       // ★ 修正：頻度を下げる
+                    'planetSystem': 40, // ★ 修正：頻度を下げる
+                    'default': baseInterval
+                };
+
+                const interval = intervals[this.type] || intervals.default;
+
+                if (this.particleTimer % interval !== 0) return;
+
+                switch (this.type) {
+                    case 'blackHole':
+                        this.createAccretionDiskParticle();
+                        break;
+                    case 'neutronStar':
+                        this.createMagneticFieldParticle();
+                        break;
+                    case 'pulsar':
+                        this.createPulsarBeamParticle();
+                        break;
+                    case 'planetSystem':
+                        this.createSolarWindParticle();
+                        break;
+                    default:
+                        if (Math.random() < 0.3) {
+                            this.createDefaultParticle();
+                        }
+                        break;
+                }
+            }
+
+            // ★ 追加：デフォルトパーティクル生成を独立化
+            createDefaultParticle() {
+                const radius = Math.sqrt(this.mass) * 1.5;
+                const angle = Math.random() * Math.PI * 2;
+                const distance = radius + Math.random() * 10;
+                const px = this.x + Math.cos(angle) * distance;
+                const py = this.y + Math.sin(angle) * distance;
+                particles.push(new Particle(px, py, this.color));
+            }
+
+            // ★ 修正：日本語タイプ名取得（引数でタイプ指定可能）
+            getTypeNameJapanese(type = this.type) {
+                const typeNames = {
+                    'normal': '通常星',
+                    'whiteDwarf': '白色矮星',
+                    'neutronStar': '中性子星',
+                    'pulsar': 'パルサー',
+                    'planetSystem': '惑星系',
+                    'blackHole': 'ブラックホール'
+                };
+                return typeNames[type] || '不明';
             }
 
             // ★ 追加：降着円盤パーティクル生成
@@ -1109,6 +1347,55 @@
                 particle.vy = -Math.sin(angle) * spiralSpeed - Math.cos(angle) * spiralSpeed * 0.3;
                 particle.life = 3.0;
                 particle.size = 1 + Math.random() * 2;
+                particles.push(particle);
+            }
+            // ★ 追加：中性子星の磁場パーティクル
+            createMagneticFieldParticle() {
+                const angle = this.rotation + Math.random() * Math.PI * 0.5;
+                const radius = Math.sqrt(this.mass) * 2;
+                const distance = radius + Math.random() * 20;
+                const px = this.x + Math.cos(angle) * distance;
+                const py = this.y + Math.sin(angle) * distance;
+
+                const particle = new Particle(px, py, '#9370DB');
+                particle.vx = Math.cos(angle + Math.PI / 2) * 2;
+                particle.vy = Math.sin(angle + Math.PI / 2) * 2;
+                particle.life = 2.0;
+                particle.size = 1;
+                particles.push(particle);
+            }
+
+            // ★ 追加：パルサーのビームパーティクル
+            createPulsarBeamParticle() {
+                // 2つの対向するビーム
+                for (let beam = 0; beam < 2; beam++) {
+                    const beamAngle = this.beamRotation + beam * Math.PI;
+                    const distance = 20 + Math.random() * 100;
+                    const px = this.x + Math.cos(beamAngle) * distance;
+                    const py = this.y + Math.sin(beamAngle) * distance;
+
+                    const particle = new Particle(px, py, '#00FFFF');
+                    particle.vx = Math.cos(beamAngle) * 5;
+                    particle.vy = Math.sin(beamAngle) * 5;
+                    particle.life = 1.5;
+                    particle.size = 2;
+                    particles.push(particle);
+                }
+            }
+
+            // ★ 追加：恒星の太陽風パーティクル
+            createSolarWindParticle() {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.sqrt(this.mass) * 1.5;
+                const distance = radius + Math.random() * 15;
+                const px = this.x + Math.cos(angle) * distance;
+                const py = this.y + Math.sin(angle) * distance;
+
+                const particle = new Particle(px, py, '#FFA500');
+                particle.vx = Math.cos(angle) * (1 + Math.random() * 2);
+                particle.vy = Math.sin(angle) * (1 + Math.random() * 2);
+                particle.life = 3.0;
+                particle.size = 1;
                 particles.push(particle);
             }
 
@@ -1143,16 +1430,187 @@
                         }
                     }
 
-                    // ★ 変更：ブラックホールと通常天体で描画を分岐
-                    if (this.isBlackHole) {
-                        this.drawBlackHole();
-                    } else {
-                        this.drawNormalBody();
+                    // ★ 変更：タイプ別描画
+                    switch (this.type) {
+                        case 'blackHole':
+                            this.drawBlackHole();
+                            break;
+                        case 'neutronStar':
+                            this.drawNeutronStar();
+                            break;
+                        case 'whiteDwarf':
+                            this.drawWhiteDwarf();
+                            break;
+                        case 'pulsar':
+                            this.drawPulsar();
+                            break;
+                        case 'planetSystem':
+                            this.drawPlanetSystem();
+                            break;
+                        default:
+                            this.drawNormalBody();
+                            break;
                     }
 
                 } catch (error) {
                     console.warn('Body draw error:', error);
                 }
+            }
+
+            // ★ 追加：中性子星の描画
+            drawNeutronStar() {
+                const radius = Math.sqrt(this.mass) * 0.8; // 通常より小さい
+
+                // 強い磁場の可視化
+                for (let field = 0; field < 4; field++) {
+                    const fieldAngle = this.rotation + (field * Math.PI / 2);
+                    const fieldRadius = radius * (2 + field * 0.5);
+
+                    ctx.strokeStyle = `rgba(147, 112, 219, ${0.3 - field * 0.05})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, fieldRadius, fieldAngle - 0.3, fieldAngle + 0.3);
+                    ctx.stroke();
+                }
+
+                // 本体
+                const coreGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius);
+                coreGradient.addColorStop(0, '#FFFFFF');
+                coreGradient.addColorStop(0.3, '#E6E6FA');
+                coreGradient.addColorStop(0.7, '#9370DB');
+                coreGradient.addColorStop(1, '#4B0082');
+
+                ctx.fillStyle = coreGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ★ 追加：白色矮星の描画
+            drawWhiteDwarf() {
+                const radius = Math.sqrt(this.mass) * 1.2;
+
+                // 温度による色変化
+                const tempFactor = this.temperature;
+                const r = Math.floor(255 * tempFactor);
+                const g = Math.floor(255 * tempFactor * 0.9);
+                const b = Math.floor(255 * (0.8 + tempFactor * 0.2));
+
+                // 冷却グラデーション
+                const coolGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius * 2);
+                coolGradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
+                coolGradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.7)`);
+                coolGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.1)`);
+
+                ctx.fillStyle = coolGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius * 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 本体
+                const coreGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius);
+                coreGradient.addColorStop(0, '#FFFFFF');
+                coreGradient.addColorStop(0.6, this.color);
+                coreGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.8)`);
+
+                ctx.fillStyle = coreGradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ★ 修正：パルサーの描画（より明確な視覚効果）
+            drawPulsar() {
+                const radius = Math.sqrt(this.mass) * 0.7; // ★ 修正：中性子星はより小さく
+
+                // ★ 修正：磁場強度に基づくビーム描画
+                const beamIntensity = Math.min(this.magneticField / 1.5, 1.0);
+
+                for (let beam = 0; beam < 2; beam++) {
+                    const beamAngle = this.beamRotation + beam * Math.PI;
+                    // ★ 修正：ビーム長は磁場強度と回転周期に依存
+                    const beamLength = radius * (8 + this.magneticField * 4) * (0.1 / this.rotationPeriod);
+
+                    const beamWidth = 2 + Math.sin(this.beamRotation * 12) * 1 * beamIntensity;
+
+                    const beamGradient = ctx.createLinearGradient(
+                        this.x, this.y,
+                        this.x + Math.cos(beamAngle) * beamLength,
+                        this.y + Math.sin(beamAngle) * beamLength
+                    );
+
+                    // ★ 修正：磁場強度によるビーム色の変化
+                    const alpha = 0.7 * beamIntensity;
+                    beamGradient.addColorStop(0, `rgba(0, 255, 255, ${alpha})`);
+                    beamGradient.addColorStop(0.3, `rgba(0, 255, 255, ${alpha * 0.7})`);
+                    beamGradient.addColorStop(0.7, `rgba(0, 255, 255, ${alpha * 0.4})`);
+                    beamGradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+
+                    ctx.strokeStyle = beamGradient;
+                    ctx.lineWidth = beamWidth;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(
+                        this.x + Math.cos(beamAngle) * beamLength,
+                        this.y + Math.sin(beamAngle) * beamLength
+                    );
+                    ctx.stroke();
+                }
+
+                // 本体（中性子星ベース）
+                this.drawNeutronStar();
+
+                // ★ 修正：パルサー特有のエフェクト（物理的に正確）
+                const pulseFrequency = 1.0 / this.rotationPeriod; // パルス周波数
+                const pulseIntensity = 0.5 + 0.5 * Math.sin(this.beamRotation * pulseFrequency) * beamIntensity;
+                const pulseRadius = radius * (1.5 + pulseIntensity * 0.8);
+
+                ctx.strokeStyle = `rgba(0, 255, 255, ${0.3 + pulseIntensity * 0.5})`;
+                ctx.lineWidth = 1 + pulseIntensity;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, pulseRadius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // ★ 追加：磁気圏の可視化
+                if (this.magneticField > 0.8) {
+                    ctx.strokeStyle = `rgba(0, 255, 255, 0.2)`;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, radius * this.magneticField * 4, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            // ★ 追加：惑星系の描画
+            drawPlanetSystem() {
+                // 恒星本体
+                this.drawNormalBody();
+
+                // 惑星の描画
+                this.planets.forEach(planet => {
+                    const px = this.x + Math.cos(planet.angle) * planet.distance;
+                    const py = this.y + Math.sin(planet.angle) * planet.distance;
+
+                    // 軌道線
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, planet.distance, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // 惑星
+                    const planetGradient = ctx.createRadialGradient(px, py, 0, px, py, planet.size);
+                    planetGradient.addColorStop(0, '#FFFFFF');
+                    planetGradient.addColorStop(0.7, planet.color);
+                    planetGradient.addColorStop(1, planet.color + '88');
+
+                    ctx.fillStyle = planetGradient;
+                    ctx.beginPath();
+                    ctx.arc(px, py, planet.size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
             }
 
             // ★ 追加：ブラックホール描画
@@ -1310,6 +1768,11 @@
                         const newVx = (survivor.mass * survivor.vx + victim.mass * victim.vx) / totalMass;
                         const newVy = (survivor.mass * survivor.vy + victim.mass * victim.vy) / totalMass;
 
+                        // ★ 追加：衝突による角運動量の計算
+                        const relativeVx = victim.vx - survivor.vx;
+                        const relativeVy = victim.vy - survivor.vy;
+                        const impactSpeed = Math.sqrt(relativeVx * relativeVx + relativeVy * relativeVy);
+
                         // 質量の重心で新しい位置を計算
                         const newX = (survivor.mass * survivor.x + victim.mass * victim.x) / totalMass;
                         const newY = (survivor.mass * survivor.y + victim.mass * victim.y) / totalMass;
@@ -1319,7 +1782,7 @@
                         survivor.y = newY;
                         survivor.vx = newVx;
                         survivor.vy = newVy;
-                        survivor.mass = Math.min(totalMass, 200); // 最大質量制限
+                        survivor.mass = Math.min(totalMass, 400); // 最大質量制限
                         survivor.trail = []; // 軌跡をリセット
 
                         // 衝突エフェクト生成
@@ -1328,7 +1791,21 @@
                         // 被害者を無効化
                         victim.isValid = false;
 
-                        console.log(`天体衝突: 質量 ${survivor.mass.toFixed(1)} の新天体が生成されました`);
+                        // ★ 追加：衝突時刻の記録（パルサー生成判定用）
+                        survivor.lastCollisionTime = time;
+                        survivor.collisionImpactSpeed = impactSpeed;
+
+                        // ★ 追加：高エネルギー衝突でパルサー化の可能性
+                        if (impactSpeed > 80 && totalMass >= PULSAR_MASS_THRESHOLD && totalMass < NEUTRON_STAR_MASS_THRESHOLD) {
+                            // 30%の確率で衝突によりパルサー化
+                            if (Math.random() < 0.3) {
+                                survivor.type = 'pulsar';
+                                survivor.initializeByType();
+                                console.log(`高エネルギー衝突によりパルサー生成！質量: ${survivor.mass.toFixed(1)}, 衝突速度: ${impactSpeed.toFixed(1)}`);
+                            }
+                        }
+
+                        console.log(`天体衝突: 質量 ${survivor.mass.toFixed(1)}, 衝突速度 ${impactSpeed.toFixed(1)}`);
                         return; // 1フレームに1回の衝突のみ処理
                     }
                 }
@@ -1369,11 +1846,11 @@
         }
 
         /**
-         * 改良された重力計算（より現実的な相互作用）
+         * ★ 修正：重力計算の最適化
          */
         function calculateGravity(dt) {
             try {
-                const G = gravity * 50;  // 重力定数を大きく調整
+                const G = gravity * 50;
                 bodies = bodies.filter(b => b.isValid);
                 if (bodies.length < 2) return;
 
@@ -1388,11 +1865,11 @@
                         const dy = bodies[j].y - bodies[i].y;
                         const distSq = dx * dx + dy * dy;
 
-                        // ソフトニングパラメータ（近すぎる時の発散を防ぐ）
-                        const softening = 100;  // より大きなソフトニング値
+                        // ソフトニングパラメータ
+                        const softening = 100;
                         const dist = Math.sqrt(distSq + softening);
 
-                        // ★ 変更：ブラックホールの重力を強化
+                        // ★ 修正：ブラックホールの重力効果
                         let effectiveG = G;
                         if (bodies[j].isBlackHole) {
                             effectiveG *= BLACK_HOLE_GRAVITY_MULTIPLIER;
@@ -1401,25 +1878,26 @@
                         // 重力の大きさ
                         const F = effectiveG * bodies[i].mass * bodies[j].mass / (dist * dist);
 
-                        // 方向を正規化して力を分解
+                        // 力を分解
                         fx += F * dx / dist;
                         fy += F * dy / dist;
                     }
 
-                    // 加速度を計算して速度を更新
+                    // 速度更新
                     bodies[i].vx += (fx / bodies[i].mass) * dt;
                     bodies[i].vy += (fy / bodies[i].mass) * dt;
 
-                    // 速度制限（システムの安定性のため）
-                    const maxSpeed = 500;
+                    // ★ 修正：速度制限を適切に
+                    const maxSpeed = 300; // ★ 修正：少し下げる
                     const speed = Math.sqrt(bodies[i].vx * bodies[i].vx + bodies[i].vy * bodies[i].vy);
                     if (speed > maxSpeed) {
-                        bodies[i].vx = (bodies[i].vx / speed) * maxSpeed;
-                        bodies[i].vy = (bodies[i].vy / speed) * maxSpeed;
+                        const factor = maxSpeed / speed;
+                        bodies[i].vx *= factor;
+                        bodies[i].vy *= factor;
                     }
                 }
 
-                // ★ 変更：衝突判定の条件追加
+                // 衝突判定
                 if (enableCollisions) {
                     handleCollisions();
                 }
@@ -1429,12 +1907,10 @@
             }
         }
 
-        /**
-         * エネルギー計算も修正
-         */
+        // ★ 修正：エネルギー計算の係数を統一
         function calculateEnergy() {
             try {
-                const G = gravity * 0.1;  // calculateGravityと同じGを使用
+                const G = gravity * 50; // ★ 修正：calculateGravityと同じ係数
                 let kinetic = 0, potential = 0;
 
                 // 運動エネルギー
@@ -1449,12 +1925,12 @@
                         if (!bodies[i].isValid || !bodies[j].isValid) continue;
                         const dx = bodies[j].x - bodies[i].x;
                         const dy = bodies[j].y - bodies[i].y;
-                        const d = Math.sqrt(dx * dx + dy * dy) + 10;  // ゼロ除算を防ぐ
+                        const d = Math.sqrt(dx * dx + dy * dy) + 10;
                         potential -= G * bodies[i].mass * bodies[j].mass / d;
                     }
                 }
 
-                return kinetic + potential;
+                return (kinetic + potential) / 10000; // ★ 修正：スケール調整
             } catch {
                 return 0;
             }
@@ -1486,32 +1962,36 @@
                 // 背景描画
                 drawBackground();
 
-                // ★ 追加：重力場の計算と描画（天体描画の前に行う）
+                // 重力場描画（オプション）
                 if (showGravityField) {
                     calculateAndDrawGravityField();
-                    // 重力場をメインキャンバスに描画
                     ctx.globalAlpha = 1.0;
                     ctx.drawImage(gravityFieldCanvas, 0, 0);
                 }
 
-                // タイムステップを計算（速度調整込み）
-                const dt = timeStep * speed;
-
                 // 物理計算
+                const dt = timeStep * speed;
                 calculateGravity(dt);
 
                 // 天体更新・描画
                 bodies.forEach(body => {
-                    body.update(dt);  // dtを渡す
+                    body.update(dt);
                     body.draw();
                 });
 
-                // パーティクル更新・描画
-                particles = particles.filter(particle => {
-                    particle.update();
-                    particle.draw();
-                    return !particle.isDead();
-                });
+                // ★ 修正：パーティクル管理の最適化
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    particles[i].update();
+                    particles[i].draw();
+                    if (particles[i].isDead()) {
+                        particles.splice(i, 1);
+                    }
+                }
+
+                // ★ 追加：パーティクル数制限
+                if (particles.length > 500) {
+                    particles.splice(0, particles.length - 400);
+                }
 
                 // 時間更新
                 time += dt;
@@ -1535,7 +2015,12 @@
         function updateDisplay() {
             try {
                 const validBodies = bodies.filter(b => b.isValid);
-                const blackHoleCount = validBodies.filter(b => b.isBlackHole).length;
+                const typeCounts = {};
+
+                validBodies.forEach(body => {
+                    const typeName = body.getTypeNameJapanese();
+                    typeCounts[typeName] = (typeCounts[typeName] || 0) + 1;
+                });
 
                 document.getElementById('bodyCount').textContent = validBodies.length;
                 document.getElementById('timeDisplay').textContent = Math.floor(time);
@@ -1543,9 +2028,15 @@
                 const energy = calculateEnergy();
                 document.getElementById('energyDisplay').textContent = energy.toFixed(0);
 
-                // ★ 追加：ブラックホール情報を表示
-                if (blackHoleCount > 0) {
-                    document.getElementById('bodyCount').textContent += ` (BH:${blackHoleCount})`;
+                // ★ 変更：天体タイプ別情報を表示
+                let typeInfo = '';
+                Object.entries(typeCounts).forEach(([type, count]) => {
+                    if (typeInfo) typeInfo += ', ';
+                    typeInfo += `${type}:${count}`;
+                });
+
+                if (typeInfo) {
+                    document.getElementById('bodyCount').textContent += ` (${typeInfo})`;
                 }
 
             } catch (error) {
@@ -1670,9 +2161,9 @@
         // プリセット（初期速度を調整）
         function setPreset(type) {
             try {
-                currentPresetType = type;    // プリセットを記憶
+                currentPresetType = type;
                 bodies = [];
-                particles = [];
+                particles = []; // ★ 追加：パーティクルもクリア
                 time = 0;
                 errorCount = 0;
 
@@ -1681,41 +2172,38 @@
 
                 switch (type) {
                     case 'binary':
-                        // 連星系：2つの天体が互いの周りを回る
-                        bodies.push(new Body(cx - 30, cy, 0, 50, 30));
-                        bodies.push(new Body(cx + 30, cy, 0, -50, 30));
+                        bodies.push(new Body(cx - 40, cy, 0, 60, 35)); // ★ 修正：パラメータ調整
+                        bodies.push(new Body(cx + 40, cy, 0, -60, 35));
                         break;
 
                     case 'triangle':
-                        // 正三角形配置：3つの天体が安定した軌道を描く
-                        const r = 100;
+                        const r = 120; // ★ 修正：距離を大きく
                         for (let i = 0; i < 3; i++) {
                             const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
                             const x = cx + r * Math.cos(angle);
                             const y = cy + r * Math.sin(angle);
-                            // 重心周りの円運動のための初速度
-                            const vx = -30 * Math.sin(angle);
-                            const vy = 30 * Math.cos(angle);
-                            bodies.push(new Body(x, y, vx, vy, 25));
+                            const vx = -35 * Math.sin(angle); // ★ 修正：速度調整
+                            const vy = 35 * Math.cos(angle);
+                            bodies.push(new Body(x, y, vx, vy, 30));
                         }
                         break;
 
                     case 'figure_eight':
-                        // 8の字軌道（近似値）
-                        bodies.push(new Body(cx, cy, 22.48326573, 34.50536957, 25));
-                        bodies.push(new Body(cx - 160, cy, -11.24163287, -17.25268479, 25));
-                        bodies.push(new Body(cx + 160, cy, -11.24163287, -17.25268479, 25));
+                        // ★ 修正：8の字軌道のパラメータ調整
+                        bodies.push(new Body(cx, cy, 25, 38, 28));
+                        bodies.push(new Body(cx - 180, cy, -12.5, -19, 28));
+                        bodies.push(new Body(cx + 180, cy, -12.5, -19, 28));
                         break;
 
                     case 'random':
-                        // ランダム配置
-                        const count = 3 + Math.floor(Math.random() * 2);
+                        const count = 3 + Math.floor(Math.random() * 3); // ★ 修正：最大数を減らす
                         for (let i = 0; i < count; i++) {
-                            const x = 100 + Math.random() * (canvas.width - 200);
-                            const y = 100 + Math.random() * (canvas.height - 200);
-                            const vx = (Math.random() - 0.5) * 80;
-                            const vy = (Math.random() - 0.5) * 80;
-                            bodies.push(new Body(x, y, vx, vy, 15 + Math.random() * 20));
+                            const x = 120 + Math.random() * (canvas.width - 240); // ★ 修正：マージン拡大
+                            const y = 120 + Math.random() * (canvas.height - 240);
+                            const vx = (Math.random() - 0.5) * 60; // ★ 修正：速度範囲調整
+                            const vy = (Math.random() - 0.5) * 60;
+                            const mass = 20 + Math.random() * 25; // ★ 修正：質量範囲調整
+                            bodies.push(new Body(x, y, vx, vy, mass));
                         }
                         break;
                 }
@@ -1723,7 +2211,7 @@
                 updateDisplay();
                 drawBackground();
 
-                // ★ 追加：プリセット選択時に自動でシミュレーション開始
+                // 自動開始
                 if (!isRunning) {
                     isRunning = true;
                     const btn = document.getElementById('playPause');
@@ -1854,22 +2342,29 @@
         }
 
         // 初期化
+
         try {
             // スライダーの初期値を設定
             document.getElementById('speedValue').textContent = speed.toFixed(1);
             document.getElementById('gravityValue').textContent = gravity;
             document.getElementById('trailValue').textContent = trailLength;
 
-            // ★ 追加：重力場キャンバスの初期化
+            // 重力場キャンバスの初期化
             setupGravityFieldCanvas();
 
             updateDisplay();
             drawBackground();
 
-            // パフォーマンス監視の開始
+            // ★ 修正：パフォーマンス監視の改善
             setInterval(() => {
-                if (currentFps < 30 && isRunning) {
-                    console.warn('Low FPS detected:', currentFps);
+                if (currentFps < 25 && isRunning) { // ★ 修正：閾値を下げる
+                    console.warn(`Low FPS detected: ${currentFps}, Bodies: ${bodies.length}, Particles: ${particles.length}`);
+
+                    // ★ 追加：自動パフォーマンス調整
+                    if (particles.length > 200) {
+                        particles.splice(0, particles.length - 150);
+                        console.log('Particles reduced for performance');
+                    }
                 }
             }, 5000);
 
