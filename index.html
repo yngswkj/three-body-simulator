@@ -559,6 +559,14 @@
                     </div>
                 </div>
 
+                <!-- ★ 追加：重力場可視化セクション -->
+                <div class="control-section">
+                    <div class="section-title">重力場可視化</div>
+                    <div class="trail-controls">
+                        <button class="trail-toggle" id="gravityFieldToggle">重力場非表示</button>
+                    </div>
+                </div>
+
                 <div class="control-section">
                     <div class="section-title">プリセット配置</div>
                     <div class="preset-buttons">
@@ -604,6 +612,13 @@
         const BLACK_HOLE_MASS_THRESHOLD = 200; // ブラックホール化する質量の閾値
         const BLACK_HOLE_GRAVITY_MULTIPLIER = 3; // ブラックホールの重力倍率
 
+        // ★ 追加：重力場可視化関連
+        let showGravityField = false;
+        let gravityFieldResolution = 60; // ★ 変更：解像度を倍増（30→60）
+        let gravityFieldCanvas = null;
+        let gravityFieldCtx = null;
+        let gravityFieldUpdateCounter = 0; // 更新頻度制御用
+
         // 星の背景用変数
         let stars = [];
         let backgroundGenerated = false;
@@ -632,6 +647,229 @@
                     canvas.width = newWidth;
                     canvas.height = newHeight;
                     generateStars(); // サイズ変更時に星を再生成
+
+                    // ★ 追加：重力場キャンバスのリサイズ
+                    setupGravityFieldCanvas();
+                }
+            } catch (error) {
+                console.warn('Canvas resize error:', error);
+            }
+        }
+
+        // ★ 追加：重力場キャンバスの設定
+        function setupGravityFieldCanvas() {
+            if (!gravityFieldCanvas) {
+                gravityFieldCanvas = document.createElement('canvas');
+                gravityFieldCtx = gravityFieldCanvas.getContext('2d');
+            }
+            gravityFieldCanvas.width = canvas.width;
+            gravityFieldCanvas.height = canvas.height;
+        }
+
+        // ★ 追加：重力場の計算と描画
+        function calculateAndDrawGravityField() {
+            if (!showGravityField || bodies.length === 0) return;
+
+            // パフォーマンスのため3フレームに1回更新
+            gravityFieldUpdateCounter++;
+            if (gravityFieldUpdateCounter % 3 !== 0) return;
+
+            const width = canvas.width;
+            const height = canvas.height;
+            const stepX = width / gravityFieldResolution;
+            const stepY = height / gravityFieldResolution;
+
+            // 重力場キャンバスをクリア
+            gravityFieldCtx.clearRect(0, 0, width, height);
+
+            // ★ 変更：重力場強度を計算（ポテンシャルではなく重力加速度）
+            let minFieldStrength = Infinity;
+            let maxFieldStrength = -Infinity;
+            const fieldStrengths = [];
+
+            for (let i = 0; i <= gravityFieldResolution; i++) {
+                fieldStrengths[i] = [];
+                for (let j = 0; j <= gravityFieldResolution; j++) {
+                    const x = i * stepX;
+                    const y = j * stepY;
+                    const fieldStrength = calculateGravityFieldStrength(x, y);
+                    fieldStrengths[i][j] = fieldStrength;
+
+                    if (fieldStrength < minFieldStrength) minFieldStrength = fieldStrength;
+                    if (fieldStrength > maxFieldStrength) maxFieldStrength = fieldStrength;
+                }
+            }
+
+            // ★ 変更：対数スケールで正規化（重力場の広いダイナミックレンジに対応）
+            const logMin = Math.log10(Math.max(minFieldStrength, 0.001));
+            const logMax = Math.log10(Math.max(maxFieldStrength, 0.001));
+
+            // 重力場を描画
+            for (let i = 0; i < gravityFieldResolution; i++) {
+                for (let j = 0; j < gravityFieldResolution; j++) {
+                    const x = i * stepX;
+                    const y = j * stepY;
+                    const fieldStrength = fieldStrengths[i][j];
+
+                    // ★ 変更：対数スケールで正規化
+                    let normalizedStrength = 0;
+                    if (fieldStrength > 0.001 && logMax !== logMin) {
+                        const logValue = Math.log10(fieldStrength);
+                        normalizedStrength = (logValue - logMin) / (logMax - logMin);
+                        normalizedStrength = Math.max(0, Math.min(1, normalizedStrength));
+                    }
+
+                    // ★ 変更：より鮮明な色マッピング
+                    const color = getEnhancedHeatmapColor(normalizedStrength, fieldStrength);
+
+                    gravityFieldCtx.fillStyle = color;
+                    gravityFieldCtx.fillRect(x, y, stepX + 1, stepY + 1);
+                }
+            }
+        }
+
+        // ★ 変更：重力場強度計算（ポテンシャルから重力加速度へ）
+        function calculateGravityFieldStrength(x, y) {
+            let totalFieldStrength = 0;
+            const G = gravity * 50;
+
+            for (let body of bodies) {
+                if (!body.isValid) continue;
+
+                const dx = x - body.x;
+                const dy = y - body.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // ★ 変更：最小距離を天体の半径に基づいて設定
+                const bodyRadius = Math.sqrt(body.mass) * 1.5;
+                const safeDistance = Math.max(distance, bodyRadius * 0.5);
+
+                // ★ 変更：ブラックホールの潮汐力を現実的に表現
+                let effectiveG = G;
+                let massMultiplier = 1;
+
+                if (body.isBlackHole) {
+                    effectiveG *= BLACK_HOLE_GRAVITY_MULTIPLIER;
+                    // ブラックホールの事象の地平線内では極端に強い重力場
+                    if (distance < body.eventHorizonRadius) {
+                        massMultiplier = 10; // 事象の地平線内では重力場を10倍に
+                    } else if (distance < body.eventHorizonRadius * 2) {
+                        // 事象の地平線周辺での急激な重力勾配
+                        const ratio = distance / body.eventHorizonRadius;
+                        massMultiplier = 1 + 9 * Math.exp(-(ratio - 1) * 3);
+                    }
+                }
+
+                // 重力加速度の大きさ: a = GM/r²
+                const fieldStrength = (effectiveG * body.mass * massMultiplier) / (safeDistance * safeDistance);
+                totalFieldStrength += fieldStrength;
+            }
+
+            return totalFieldStrength;
+        }
+
+        // ★ 変更：強化されたヒートマップ色計算
+        function getEnhancedHeatmapColor(value, rawFieldStrength) {
+            // 0-1の値をより鮮明な色グラデーションに変換
+            value = Math.max(0, Math.min(1, value));
+
+            let r, g, b, alpha;
+
+            // ★ 変更：より多段階の色変化で重力場の強度を表現
+            if (value < 0.1) {
+                // 極弱い重力場：透明に近い紫
+                const t = value / 0.1;
+                r = Math.floor(t * 50);
+                g = 0;
+                b = Math.floor(t * 100);
+                alpha = t * 0.1;
+            } else if (value < 0.3) {
+                // 弱い重力場：紫→青
+                const t = (value - 0.1) / 0.2;
+                r = Math.floor(50 + t * 50);
+                g = Math.floor(t * 100);
+                b = Math.floor(100 + t * 155);
+                alpha = 0.1 + t * 0.15;
+            } else if (value < 0.5) {
+                // 中程度の重力場：青→水色
+                const t = (value - 0.3) / 0.2;
+                r = Math.floor(100 - t * 100);
+                g = Math.floor(100 + t * 155);
+                b = 255;
+                alpha = 0.25 + t * 0.15;
+            } else if (value < 0.7) {
+                // 強い重力場：水色→緑
+                const t = (value - 0.5) / 0.2;
+                r = 0;
+                g = 255;
+                b = Math.floor(255 - t * 255);
+                alpha = 0.4 + t * 0.15;
+            } else if (value < 0.85) {
+                // 非常に強い重力場：緑→黄
+                const t = (value - 0.7) / 0.15;
+                r = Math.floor(t * 255);
+                g = 255;
+                b = 0;
+                alpha = 0.55 + t * 0.15;
+            } else if (value < 0.95) {
+                // 極強い重力場：黄→オレンジ
+                const t = (value - 0.85) / 0.1;
+                r = 255;
+                g = Math.floor(255 - t * 100);
+                b = 0;
+                alpha = 0.7 + t * 0.15;
+            } else {
+                // ブラックホール級の重力場：オレンジ→赤→白
+                const t = (value - 0.95) / 0.05;
+                r = 255;
+                g = Math.floor(155 * (1 - t) + 255 * t);
+                b = Math.floor(255 * t);
+                alpha = 0.85 + t * 0.15;
+            }
+
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        // ★ 追加：重力ポテンシャル計算（既存の関数を維持、エネルギー計算で使用）
+        function calculateGravityPotential(x, y) {
+            let potential = 0;
+            const G = gravity * 50;
+
+            for (let body of bodies) {
+                if (!body.isValid) continue;
+
+                const dx = x - body.x;
+                const dy = y - body.y;
+                const distance = Math.sqrt(dx * dx + dy * dy) + 10; // ゼロ除算防止
+
+                // ブラックホールの重力を考慮
+                let effectiveG = G;
+                if (body.isBlackHole) {
+                    effectiveG *= BLACK_HOLE_GRAVITY_MULTIPLIER;
+                }
+
+                potential -= (effectiveG * body.mass) / distance;
+            }
+
+            return potential;
+        }
+
+        /**
+         * キャンバスサイズ設定
+         */
+        function resizeCanvas() {
+            try {
+                const container = canvas.parentElement;
+                const newWidth = container.clientWidth;
+                const newHeight = container.clientHeight;
+
+                if (canvas.width !== newWidth || canvas.height !== newHeight) {
+                    canvas.width = newWidth;
+                    canvas.height = newHeight;
+                    generateStars(); // サイズ変更時に星を再生成
+
+                    // ★ 追加：重力場キャンバスのリサイズ
+                    setupGravityFieldCanvas();
                 }
             } catch (error) {
                 console.warn('Canvas resize error:', error);
@@ -1248,6 +1486,14 @@
                 // 背景描画
                 drawBackground();
 
+                // ★ 追加：重力場の計算と描画（天体描画の前に行う）
+                if (showGravityField) {
+                    calculateAndDrawGravityField();
+                    // 重力場をメインキャンバスに描画
+                    ctx.globalAlpha = 1.0;
+                    ctx.drawImage(gravityFieldCanvas, 0, 0);
+                }
+
                 // タイムステップを計算（速度調整込み）
                 const dt = timeStep * speed;
 
@@ -1406,6 +1652,19 @@
             const btn = document.getElementById('collisionToggle');
             btn.classList.toggle('active', enableCollisions);
             btn.textContent = enableCollisions ? '衝突有効' : '衝突無効';
+        });
+
+        // ★ 追加：重力場表示切り替えイベント
+        document.getElementById('gravityFieldToggle').addEventListener('click', () => {
+            showGravityField = !showGravityField;
+            const btn = document.getElementById('gravityFieldToggle');
+            btn.classList.toggle('active', showGravityField);
+            btn.textContent = showGravityField ? '重力場表示' : '重力場非表示';
+
+            if (!showGravityField && gravityFieldCtx) {
+                // 重力場を非表示にする時はキャンバスをクリア
+                gravityFieldCtx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         });
 
         // プリセット（初期速度を調整）
@@ -1600,6 +1859,9 @@
             document.getElementById('speedValue').textContent = speed.toFixed(1);
             document.getElementById('gravityValue').textContent = gravity;
             document.getElementById('trailValue').textContent = trailLength;
+
+            // ★ 追加：重力場キャンバスの初期化
+            setupGravityFieldCanvas();
 
             updateDisplay();
             drawBackground();
