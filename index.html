@@ -361,6 +361,72 @@
             z-index: 1000;
         }
 
+        /* ★ 追加：ツールチップのスタイル */
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(15px);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.4;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            min-width: 180px;
+        }
+
+        .tooltip-title {
+            font-weight: bold;
+            color: #4ecdc4;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+
+        .tooltip-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .tooltip-label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .tooltip-value {
+            color: #ffffff;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        /* ★ 追加：特殊天体タイプ別の色分け */
+        .tooltip.pulsar .tooltip-title {
+            color: #00FFFF;
+        }
+
+        .tooltip.blackHole .tooltip-title {
+            color: #ff6b6b;
+        }
+
+        .tooltip.neutronStar .tooltip-title {
+            color: #E6E6FA;
+        }
+
+        .tooltip.whiteDwarf .tooltip-title {
+            color: #F0F8FF;
+        }
+
+        .tooltip.planetSystem .tooltip-title {
+            color: #FFD700;
+        }
+
         @media (max-width: 380px) {
             .header h1 {
                 font-size: 20px;
@@ -609,14 +675,14 @@
         let enableCollisions = true;
 
         // ★ 追加：ブラックホール関連定数
-        const BLACK_HOLE_MASS_THRESHOLD = 300; // ★ 変更：ブラックホール化する質量の閾値を厳しく（200→300）
+        const BLACK_HOLE_MASS_THRESHOLD = 400; // ★ 変更：ブラックホール化する質量の閾値を厳しく（200→300）
         const BLACK_HOLE_GRAVITY_MULTIPLIER = 3; // ブラックホールの重力倍率
 
         // ★ 追加：新しい天体タイプの閾値
         const WHITE_DWARF_MASS_THRESHOLD = 80;   // 白色矮星化する質量の閾値
-        const PULSAR_MASS_THRESHOLD = 120;       // パルサー化する質量の閾値
-        const NEUTRON_STAR_MASS_THRESHOLD = 150; // 中性子星化する質量の閾値
-        const PLANET_SYSTEM_MASS_THRESHOLD = 200; // 惑星系化する質量の閾値
+        const PULSAR_MASS_THRESHOLD = 160;       // パルサー化する質量の閾値
+        const NEUTRON_STAR_MASS_THRESHOLD = 190; // 中性子星化する質量の閾値
+        const PLANET_SYSTEM_MASS_THRESHOLD = 250; // 惑星系化する質量の閾値
 
         // ★ 追加：重力場可視化関連
         let showGravityField = false;
@@ -1022,7 +1088,7 @@
 
                 // 磁場が弱くなると通常の中性子星になる
                 // また、一定確率で磁場が完全に減衰
-                return this.magneticField < 0.5 || (this.pulsarAge > 5000 && Math.random() < 0.001);
+                return this.magneticField < 0.5 || (this.pulsarAge > 500 && Math.random() < 0.001);
             }
 
             // ★ 追加：高回転エネルギー判定
@@ -2291,13 +2357,263 @@
             return null;
         }
 
-        // タッチ・マウスイベントの登録：passive: false を指定
+        // ★ 追加：ツールチップ関連変数
+        let hoveredBody = null;
+        let tooltip = null;
+        let mousePos = { x: 0, y: 0 };
+
+        /**
+         * ★ 追加：ツールチップの初期化
+         */
+        function initializeTooltip() {
+            tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            document.body.appendChild(tooltip);
+        }
+
+        /**
+         * ★ 追加：天体の詳細情報を取得
+         */
+        function getBodyInfo(body) {
+            const speed = Math.sqrt(body.vx * body.vx + body.vy * body.vy);
+            const kineticEnergy = 0.5 * body.mass * speed * speed;
+
+            // 他の天体との相互作用エネルギーを計算
+            let potentialEnergy = 0;
+            const G = gravity * 50;
+
+            bodies.forEach(otherBody => {
+                if (otherBody !== body && otherBody.isValid) {
+                    const dx = otherBody.x - body.x;
+                    const dy = otherBody.y - body.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) + 10;
+                    potentialEnergy -= G * body.mass * otherBody.mass / distance;
+                }
+            });
+
+            const totalEnergy = (kineticEnergy + potentialEnergy / 2) / 1000; // スケール調整
+
+            return {
+                type: body.getTypeNameJapanese(),
+                mass: body.mass.toFixed(1),
+                speed: speed.toFixed(1),
+                kineticEnergy: (kineticEnergy / 1000).toFixed(1),
+                potentialEnergy: (potentialEnergy / 2000).toFixed(1), // 重複カウント回避
+                totalEnergy: totalEnergy.toFixed(1),
+                magneticField: body.magneticField ? body.magneticField.toFixed(2) : null,
+                temperature: body.temperature ? body.temperature.toFixed(2) : null,
+                rotationPeriod: body.rotationPeriod ? body.rotationPeriod.toFixed(3) : null,
+                age: body.pulsarAge ? Math.floor(body.pulsarAge) : null,
+                planets: body.planets ? body.planets.length : null
+            };
+        }
+
+        /**
+         * ★ 追加：ツールチップの更新
+         */
+        function updateTooltip(body, x, y) {
+            if (!tooltip || !body) return;
+
+            const info = getBodyInfo(body);
+
+            // ツールチップのクラスを更新（天体タイプに応じた色分け）
+            tooltip.className = `tooltip ${body.type}`;
+
+            let content = `<div class="tooltip-title">${info.type}</div>`;
+
+            // 基本情報
+            content += `<div class="tooltip-row">
+                <span class="tooltip-label">質量:</span>
+                <span class="tooltip-value">${info.mass}</span>
+            </div>`;
+
+            content += `<div class="tooltip-row">
+                <span class="tooltip-label">速度:</span>
+                <span class="tooltip-value">${info.speed}</span>
+            </div>`;
+
+            content += `<div class="tooltip-row">
+                <span class="tooltip-label">運動エネルギー:</span>
+                <span class="tooltip-value">${info.kineticEnergy}</span>
+            </div>`;
+
+            content += `<div class="tooltip-row">
+                <span class="tooltip-label">位置エネルギー:</span>
+                <span class="tooltip-value">${info.potentialEnergy}</span>
+            </div>`;
+
+            content += `<div class="tooltip-row">
+                <span class="tooltip-label">総エネルギー:</span>
+                <span class="tooltip-value">${info.totalEnergy}</span>
+            </div>`;
+
+            // 天体タイプ別の追加情報
+            switch (body.type) {
+                case 'pulsar':
+                    if (info.magneticField) {
+                        content += `<div class="tooltip-row">
+                            <span class="tooltip-label">磁場強度:</span>
+                            <span class="tooltip-value">${info.magneticField}</span>
+                        </div>`;
+                    }
+                    if (info.rotationPeriod) {
+                        content += `<div class="tooltip-row">
+                            <span class="tooltip-label">回転周期:</span>
+                            <span class="tooltip-value">${info.rotationPeriod}s</span>
+                        </div>`;
+                    }
+                    if (info.age !== null) {
+                        content += `<div class="tooltip-row">
+                            <span class="tooltip-label">年齢:</span>
+                            <span class="tooltip-value">${info.age}</span>
+                        </div>`;
+                    }
+                    break;
+
+                case 'neutronStar':
+                    if (info.magneticField) {
+                        content += `<div class="tooltip-row">
+                            <span class="tooltip-label">磁場強度:</span>
+                            <span class="tooltip-value">${info.magneticField}</span>
+                        </div>`;
+                    }
+                    break;
+
+                case 'whiteDwarf':
+                    if (info.temperature) {
+                        content += `<div class="tooltip-row">
+                            <span class="tooltip-label">温度係数:</span>
+                            <span class="tooltip-value">${info.temperature}</span>
+                        </div>`;
+                    }
+                    break;
+
+                case 'blackHole':
+                    const eventHorizonRadius = body.eventHorizonRadius ? body.eventHorizonRadius.toFixed(1) : 'N/A';
+                    content += `<div class="tooltip-row">
+                        <span class="tooltip-label">事象地平線:</span>
+                        <span class="tooltip-value">${eventHorizonRadius}</span>
+                    </div>`;
+                    break;
+
+                case 'planetSystem':
+                    if (info.planets !== null) {
+                        content += `<div class="tooltip-row">
+                            <span class="tooltip-label">惑星数:</span>
+                            <span class="tooltip-value">${info.planets}個</span>
+                        </div>`;
+                    }
+                    break;
+            }
+
+            tooltip.innerHTML = content;
+
+            // 位置調整（画面端での表示を考慮）
+            const rect = canvas.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+
+            let left = rect.left + x + 15;
+            let top = rect.top + y - 10;
+
+            // 右端チェック
+            if (left + tooltipRect.width > window.innerWidth - 10) {
+                left = rect.left + x - tooltipRect.width - 15;
+            }
+
+            // 下端チェック
+            if (top + tooltipRect.height > window.innerHeight - 10) {
+                top = rect.top + y - tooltipRect.height - 15;
+            }
+
+            // 上端チェック
+            if (top < 10) {
+                top = rect.top + y + 15;
+            }
+
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${top}px`;
+            tooltip.style.display = 'block';
+        }
+
+        /**
+         * ★ 追加：ツールチップの非表示
+         */
+        function hideTooltip() {
+            if (tooltip) {
+                tooltip.style.display = 'none';
+            }
+            hoveredBody = null;
+        }
+
+        // ★ 修正：マウスイベント処理を拡張
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function findBodyAt(x, y) {
+            for (let body of bodies) {
+                if (!body.isValid) continue;
+                const dx = x - body.x;
+                const dy = y - body.y;
+                const radius = Math.sqrt(body.mass) * 1.5;
+                if (dx * dx + dy * dy <= radius * radius) {
+                    return body;
+                }
+            }
+            return null;
+        }
+
+        // ★ 追加：マウス移動時の処理
+        function handleMouseMove(e) {
+            if (isDragging && selectedBody) {
+                const pos = getEventPos(e);
+                selectedBody.x = pos.x - dragOffset.x;
+                selectedBody.y = pos.y - dragOffset.y;
+                selectedBody.vx = 0;
+                selectedBody.vy = 0;
+                selectedBody.trail = [];
+                return;
+            }
+
+            // ツールチップ処理
+            const pos = getEventPos(e);
+            mousePos = pos;
+
+            const bodyAtMouse = findBodyAt(pos.x, pos.y);
+
+            if (bodyAtMouse && bodyAtMouse !== hoveredBody) {
+                hoveredBody = bodyAtMouse;
+                updateTooltip(bodyAtMouse, pos.x, pos.y);
+                canvas.style.cursor = 'pointer';
+            } else if (!bodyAtMouse && hoveredBody) {
+                hideTooltip();
+                canvas.style.cursor = 'crosshair';
+            } else if (bodyAtMouse === hoveredBody && tooltip && tooltip.style.display === 'block') {
+                // 同じ天体の上でマウスが動いている場合、位置のみ更新
+                updateTooltip(bodyAtMouse, pos.x, pos.y);
+            }
+        }
+
+        // タッチ・マウスイベントの登録
         canvas.addEventListener('touchstart', handleStart, { passive: false });
-        canvas.addEventListener('touchmove', handleMove, { passive: false });
+        canvas.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                handleMove(e);
+            }
+        }, { passive: false });
         canvas.addEventListener('mousedown', handleStart);
-        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('mousemove', handleMouseMove); // ★ 修正：新しいハンドラーを使用
         canvas.addEventListener('touchend', handleEnd);
         canvas.addEventListener('mouseup', handleEnd);
+
+        // ★ 追加：マウスがキャンバスから離れた時の処理
+        canvas.addEventListener('mouseleave', hideTooltip);
 
         function handleStart(e) {
             e.preventDefault();
@@ -2310,6 +2626,7 @@
                 dragOffset.x = pos.x - body.x;
                 dragOffset.y = pos.y - body.y;
                 canvas.style.cursor = 'grabbing';
+                hideTooltip(); // ドラッグ開始時はツールチップを非表示
             } else {
                 // 新しい天体を作成（初期速度を小さく調整）
                 if (bodies.length < 20) {
@@ -2320,6 +2637,7 @@
                     bodies.push(newBody);
                     updateDisplay();
                 }
+                hideTooltip();
             }
         }
 
@@ -2342,8 +2660,10 @@
         }
 
         // 初期化
-
         try {
+            // ★ 追加：ツールチップの初期化
+            initializeTooltip();
+
             // スライダーの初期値を設定
             document.getElementById('speedValue').textContent = speed.toFixed(1);
             document.getElementById('gravityValue').textContent = gravity;
