@@ -548,6 +548,139 @@
                 /* 超大画面では幅を少し広く */
             }
         }
+
+        /* ★ 追加：ヘルプボタンのスタイル */
+        .help-button {
+            background: rgba(116, 185, 255, 0.2);
+            border: 1px solid rgba(116, 185, 255, 0.4);
+            color: #74b9ff;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .help-button:hover {
+            background: rgba(116, 185, 255, 0.3);
+            border-color: rgba(116, 185, 255, 0.6);
+            transform: scale(1.1);
+        }
+
+        /* ★ 追加：ヘルプポップアップのスタイル */
+        .help-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+            z-index: 2000;
+            display: none;
+            border: 1px solid rgba(116, 185, 255, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .help-popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(116, 185, 255, 0.2);
+            padding-bottom: 15px;
+        }
+
+        .help-popup-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #74b9ff;
+        }
+
+        .help-close-button {
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid rgba(255, 107, 107, 0.4);
+            color: #ff6b6b;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .help-close-button:hover {
+            background: rgba(255, 107, 107, 0.3);
+            border-color: rgba(255, 107, 107, 0.6);
+            transform: scale(1.1);
+        }
+
+        .help-section {
+            margin-bottom: 20px;
+        }
+
+        .help-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .help-section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #4ecdc4;
+            margin-bottom: 10px;
+        }
+
+        .help-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #4ecdc4;
+        }
+
+        .help-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .help-icon {
+            font-size: 18px;
+            margin-right: 12px;
+            min-width: 25px;
+            text-align: center;
+        }
+
+        .help-text {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* ★ 追加：オーバーレイ */
+        .help-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1999;
+            display: none;
+        }
     </style>
 </head>
 
@@ -555,9 +688,66 @@
     <div class="container">
         <div class="header">
             <h1>三体問題シミュレータ</h1>
-            <div class="subtitle">重力相互作用による天体軌道の可視化シミュレーション</div>
-            <div class="instructions">
-                📱 タップ/クリック: 天体配置 | 🖱️ ドラッグ: 天体移動 | ⚙️ プリセット: 既知の軌道配置
+            <div class="subtitle">
+                重力相互作用による天体軌道の可視化シミュレーション
+                <button class="help-button" id="helpButton">?</button>
+            </div>
+        </div>
+
+        <!-- ★ 追加：ヘルプポップアップ -->
+        <div class="help-overlay" id="helpOverlay"></div>
+        <div class="help-popup" id="helpPopup">
+            <div class="help-popup-header">
+                <div class="help-popup-title">操作ガイド</div>
+                <button class="help-close-button" id="helpCloseButton">×</button>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">基本操作</div>
+                <div class="help-item">
+                    <div class="help-icon">🖱️</div>
+                    <div class="help-text">クリック/タップ: 空いている場所に新しい天体を配置</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">👆</div>
+                    <div class="help-text">ドラッグ: 天体を移動（速度がリセットされます）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">📱</div>
+                    <div class="help-text">ホバー/長押し: 天体の詳細情報を表示</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">コントロール</div>
+                <div class="help-item">
+                    <div class="help-icon">⚙️</div>
+                    <div class="help-text">プリセット: 既知の安定軌道配置を簡単設定</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🎛️</div>
+                    <div class="help-text">スライダー: シミュレーション速度、重力、軌跡を調整</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">💥</div>
+                    <div class="help-text">衝突判定: 天体同士の衝突・合体をオン/オフ</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">天体の種類</div>
+                <div class="help-item">
+                    <div class="help-icon">⭐</div>
+                    <div class="help-text">通常星 → 白色矮星 → 中性子星/パルサー → ブラックホール</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🌟</div>
+                    <div class="help-text">質量が増加すると天体が進化し、異なる物理効果を発現</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🪐</div>
+                    <div class="help-text">惑星系: 大質量星の周りに惑星が自動生成</div>
+                </div>
             </div>
         </div>
 
@@ -628,8 +818,7 @@
                         <button class="trail-toggle active" id="trailToggle">軌跡表示</button>
                         <div class="slider-container">
                             <span class="slider-label">長さ</span>
-                            <input type="range" id="trailSlider" class="slider" min="10" max="1000" step="10"
-                                value="30">
+                            <input type="range" id="trailSlider" class="slider" min="10" max="500" step="10" value="30">
                             <span class="value-display" id="trailValue">30</span>
                         </div>
                     </div>
@@ -720,6 +909,366 @@
 
         // 現在のプリセットを記憶
         let currentPresetType = null;
+
+        // ★ 追加：パフォーマンス監視システム
+        let performanceMonitor = {
+            frameCount: 0,
+            lastFpsCheck: Date.now(),
+            currentFps: 60,
+            fpsHistory: [],
+            lowFpsCount: 0,
+            optimizationActive: false,
+            originalTrailLength: trailLength,
+            targetFps: 55, // 最低限維持したいFPS
+            criticalFps: 50, // この値を下回ったら積極的に最適化
+            emergencyFps: 45, // 緊急最適化発動FPS
+            optimizationLevel: 0, // 0-4の最適化レベル
+            consecutiveLowFps: 0, // 連続低FPS回数
+            lastOptimizationTime: 0, // 最後の最適化実行時刻
+            trailRenderQuality: 1.0 // 軌跡描画品質（1.0=100%）
+        };
+
+        /**
+         * ★ 追加：FPS監視とパフォーマンス最適化
+         */
+        function monitorPerformance() {
+            performanceMonitor.frameCount++;
+            const now = Date.now();
+
+            // 1秒ごとにFPSを計算
+            if (now - performanceMonitor.lastFpsCheck >= 1000) {
+                performanceMonitor.currentFps = performanceMonitor.frameCount;
+                performanceMonitor.frameCount = 0;
+                performanceMonitor.lastFpsCheck = now;
+
+                // FPS履歴を保持（最大10秒分）
+                performanceMonitor.fpsHistory.push(performanceMonitor.currentFps);
+                if (performanceMonitor.fpsHistory.length > 10) {
+                    performanceMonitor.fpsHistory.shift();
+                }
+
+                // パフォーマンス最適化の判定
+                optimizePerformance();
+
+                // FPS表示を更新
+                currentFps = performanceMonitor.currentFps;
+            }
+        }
+
+        /**
+         * ★ 追加：段階的パフォーマンス最適化システム
+         */
+        function optimizePerformance() {
+            const avgFps = performanceMonitor.fpsHistory.reduce((a, b) => a + b, 0) / performanceMonitor.fpsHistory.length;
+            const now = Date.now();
+
+            // 連続低FPS検出
+            if (avgFps < performanceMonitor.targetFps) {
+                performanceMonitor.consecutiveLowFps++;
+            } else {
+                performanceMonitor.consecutiveLowFps = Math.max(0, performanceMonitor.consecutiveLowFps - 1);
+            }
+
+            // 緊急最適化（即座に実行）
+            if (avgFps < performanceMonitor.emergencyFps) {
+                executeEmergencyOptimization();
+                return;
+            }
+
+            // 段階的最適化（2秒間隔で実行）
+            if (now - performanceMonitor.lastOptimizationTime > 2000) {
+                if (performanceMonitor.consecutiveLowFps >= 2) {
+                    activateNextOptimizationLevel(avgFps);
+                } else if (performanceMonitor.optimizationActive && avgFps > performanceMonitor.targetFps) {
+                    relaxOptimization();
+                }
+                performanceMonitor.lastOptimizationTime = now;
+            }
+        }
+
+        /**
+         * ★ 追加：緊急最適化（即座に軌跡を大幅削減）
+         */
+        function executeEmergencyOptimization() {
+            console.warn('🚨 緊急最適化発動！ FPSが極端に低下しています');
+
+            // 軌跡を即座に10%まで削減
+            const emergencyLength = Math.max(5, Math.floor(trailLength * 0.1));
+            bodies.forEach(body => {
+                if (body.trail.length > emergencyLength) {
+                    // 最新の軌跡のみ保持
+                    body.trail = body.trail.slice(-emergencyLength);
+                }
+            });
+
+            // パーティクルも大幅削減
+            if (particles.length > 50) {
+                particles.splice(0, particles.length - 50);
+            }
+
+            // 最適化レベルを最大に
+            performanceMonitor.optimizationLevel = 4;
+            performanceMonitor.optimizationActive = true;
+            performanceMonitor.trailRenderQuality = 0.1;
+
+            console.log(`緊急最適化完了 - 軌跡長: ${emergencyLength}, パーティクル数: ${particles.length}`);
+        }
+
+        /**
+         * ★ 追加：段階的最適化レベル適用
+         */
+        function activateNextOptimizationLevel(avgFps) {
+            const totalTrailPoints = bodies.reduce((sum, body) => sum + body.trail.length, 0);
+
+            // 最適化レベルを決定
+            let targetLevel = 0;
+            if (avgFps < 40) targetLevel = 4;
+            else if (avgFps < 45) targetLevel = 3;
+            else if (avgFps < 50) targetLevel = 2;
+            else if (avgFps < 55) targetLevel = 1;
+
+            if (targetLevel > performanceMonitor.optimizationLevel) {
+                performanceMonitor.optimizationLevel = targetLevel;
+                performanceMonitor.optimizationActive = true;
+
+                console.log(`最適化レベル ${targetLevel} 発動 - FPS: ${avgFps.toFixed(1)}, 軌跡点数: ${totalTrailPoints}`);
+
+                switch (targetLevel) {
+                    case 1: // 軽微な最適化
+                        applyLightOptimization();
+                        break;
+                    case 2: // 中程度の最適化
+                        applyModerateOptimization();
+                        break;
+                    case 3: // 重度の最適化
+                        applyHeavyOptimization();
+                        break;
+                    case 4: // 最大最適化
+                        applyMaximumOptimization();
+                        break;
+                }
+            }
+        }
+
+        /**
+         * ★ 追加：緊急最適化発動時のパラメータ調整
+         */
+        function adjustParametersForEmergencyOptimization() {
+            // 緊急最適化発動時にパラメータを調整
+            speed = Math.max(0.5, speed * 0.7);
+            gravity = Math.min(300, gravity * 1.2);
+            trailLength = Math.max(5, Math.floor(trailLength * 0.1));
+
+            // スライダーの値を更新
+            document.getElementById('speedSlider').value = speed;
+            document.getElementById('gravitySlider').value = gravity;
+            document.getElementById('trailSlider').value = trailLength;
+
+            // 表示を更新
+            document.getElementById('speedValue').textContent = speed.toFixed(1);
+            document.getElementById('gravityValue').textContent = gravity;
+            document.getElementById('trailValue').textContent = trailLength;
+        }
+
+        /**
+         * ★ 追加：軽微な最適化（レベル1）
+         */
+        function applyLightOptimization() {
+            performanceMonitor.trailRenderQuality = 0.8;
+
+            // 軌跡を80%に削減
+            bodies.forEach(body => {
+                if (body.trail.length > trailLength * 0.8) {
+                    const targetLength = Math.floor(trailLength * 0.8);
+                    body.trail = adaptiveTrailReduction(body.trail, targetLength);
+                }
+            });
+
+            console.log('軽微な最適化適用 - 軌跡品質: 80%');
+        }
+
+        /**
+         * ★ 追加：中程度の最適化（レベル2）
+         */
+        function applyModerateOptimization() {
+            performanceMonitor.trailRenderQuality = 0.6;
+
+            // 軌跡を60%に削減
+            bodies.forEach(body => {
+                if (body.trail.length > trailLength * 0.6) {
+                    const targetLength = Math.floor(trailLength * 0.6);
+                    body.trail = adaptiveTrailReduction(body.trail, targetLength);
+                }
+            });
+
+            // パーティクル数制限
+            if (particles.length > 200) {
+                particles.splice(0, particles.length - 200);
+            }
+
+            console.log('中程度の最適化適用 - 軌跡品質: 60%, パーティクル制限: 200');
+        }
+
+        /**
+         * ★ 追加：重度の最適化（レベル3）
+         */
+        function applyHeavyOptimization() {
+            performanceMonitor.trailRenderQuality = 0.4;
+
+            // 軌跡を40%に削減
+            bodies.forEach(body => {
+                if (body.trail.length > trailLength * 0.4) {
+                    const targetLength = Math.floor(trailLength * 0.4);
+                    body.trail = adaptiveTrailReduction(body.trail, targetLength);
+                }
+            });
+
+            // パーティクル数を大幅制限
+            if (particles.length > 100) {
+                particles.splice(0, particles.length - 100);
+            }
+
+            // 重力場表示を無効化
+            if (showGravityField) {
+                showGravityField = false;
+                const btn = document.getElementById('gravityFieldToggle');
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.textContent = '重力場非表示';
+                }
+                console.log('重力場表示を自動無効化');
+            }
+
+            console.log('重度の最適化適用 - 軌跡品質: 40%, パーティクル制限: 100');
+        }
+
+        /**
+         * ★ 追加：最大最適化（レベル4）
+         */
+        function applyMaximumOptimization() {
+            performanceMonitor.trailRenderQuality = 0.2;
+
+            // 軌跡を20%に削減
+            bodies.forEach(body => {
+                if (body.trail.length > trailLength * 0.2) {
+                    const targetLength = Math.max(5, Math.floor(trailLength * 0.2));
+                    body.trail = adaptiveTrailReduction(body.trail, targetLength);
+                }
+            });
+
+            // パーティクルを最小限に
+            if (particles.length > 50) {
+                particles.splice(0, particles.length - 50);
+            }
+
+            console.log('最大最適化適用 - 軌跡品質: 20%, パーティクル制限: 50');
+        }
+
+        /**
+         * ★ 追加：スマートな軌跡削減（重要な点を保持）
+         */
+        function adaptiveTrailReduction(trail, targetLength) {
+            if (trail.length <= targetLength) return trail;
+
+            const reducedTrail = [];
+
+            // 最新の1/3は必ず保持
+            const recentCount = Math.floor(targetLength / 3);
+            const recentTrail = trail.slice(-recentCount);
+
+            // 古い軌跡は間引き
+            const oldTrail = trail.slice(0, -recentCount);
+            const oldTargetCount = targetLength - recentCount;
+
+            for (let i = 0; i < oldTargetCount; i++) {
+                const index = Math.floor(i * (oldTrail.length / oldTargetCount));
+                if (oldTrail[index]) {
+                    reducedTrail.push(oldTrail[index]);
+                }
+            }
+
+            // 最新の軌跡を追加
+            return [...reducedTrail, ...recentTrail];
+        }
+
+        /**
+         * ★ 追加：最適化の段階的緩和
+         */
+        function relaxOptimization() {
+            if (performanceMonitor.optimizationLevel > 0) {
+                performanceMonitor.optimizationLevel--;
+
+                if (performanceMonitor.optimizationLevel === 0) {
+                    performanceMonitor.optimizationActive = false;
+                    performanceMonitor.trailRenderQuality = 1.0;
+                    console.log('パフォーマンス最適化解除');
+                } else {
+                    // 段階的に品質を向上
+                    const qualityMap = [1.0, 0.8, 0.6, 0.4, 0.2];
+                    performanceMonitor.trailRenderQuality = qualityMap[performanceMonitor.optimizationLevel];
+                    console.log(`最適化レベル ${performanceMonitor.optimizationLevel} に緩和`);
+                }
+            }
+        }
+
+        /**
+         * ★ 追加：適応的品質調整関数
+         */
+        function updateAdaptiveQuality() {
+            // 軌跡描画品質の動的調整
+            if (performanceMonitor.optimizationActive) {
+                // 最適化中は品質をさらに動的調整
+                if (performanceMonitor.currentFps < performanceMonitor.criticalFps) {
+                    performanceMonitor.trailRenderQuality = Math.max(0.1, performanceMonitor.trailRenderQuality - 0.05);
+                } else if (performanceMonitor.currentFps > performanceMonitor.targetFps) {
+                    const qualityMap = [1.0, 0.8, 0.6, 0.4, 0.2];
+                    const targetQuality = qualityMap[performanceMonitor.optimizationLevel];
+                    performanceMonitor.trailRenderQuality = Math.min(targetQuality, performanceMonitor.trailRenderQuality + 0.02);
+                }
+            }
+        }
+
+        /**
+         * ★ 追加：メモリ使用量監視の強化
+         */
+        function checkMemoryUsage() {
+            if (performance.memory) {
+                const memoryUsage = performance.memory.usedJSHeapSize / (1024 * 1024); // MB
+                const memoryLimit = 150; // MB
+
+                if (memoryUsage > memoryLimit) {
+                    console.warn(`高メモリ使用量検出: ${memoryUsage.toFixed(1)}MB - 軌跡を最適化します`);
+
+                    // メモリ使用量に応じた軌跡削減
+                    const reductionRatio = Math.min(0.5, (memoryUsage - memoryLimit) / memoryLimit);
+                    const targetLength = Math.floor(trailLength * (1 - reductionRatio));
+
+                    bodies.forEach(body => {
+                        if (body.trail.length > targetLength) {
+                            body.trail = adaptiveTrailReduction(body.trail, targetLength);
+                        }
+                    });
+
+                    // パーティクルも削減
+                    const maxParticles = Math.max(50, 300 - Math.floor(reductionRatio * 200));
+                    if (particles.length > maxParticles) {
+                        particles.splice(0, particles.length - maxParticles);
+                    }
+
+                    console.log(`メモリ最適化完了 - 目標軌跡長: ${targetLength}, 最大パーティクル: ${maxParticles}`);
+                }
+
+                // パフォーマンス統計をFPS表示に反映
+                const fpsElement = document.getElementById('fpsDisplay');
+                if (fpsElement) {
+                    let fpsText = performanceMonitor.currentFps.toString();
+                    if (performanceMonitor.optimizationActive) {
+                        fpsText += ` (最適化Lv${performanceMonitor.optimizationLevel})`;
+                    }
+                    fpsElement.textContent = fpsText;
+                }
+            }
+        }
 
         /**
          * キャンバスサイズ設定
@@ -1262,6 +1811,7 @@
                     this.handleBoundaryConditions();
 
                     // 脈動効果の更新
+
                     this.pulsePhase += 0.05;
 
                     // パーティクル生成
@@ -1458,6 +2008,7 @@
                 for (let beam = 0; beam < 2; beam++) {
                     const beamAngle = this.beamRotation + beam * Math.PI;
                     const distance = 20 + Math.random() * 100;
+
                     const px = this.x + Math.cos(beamAngle) * distance;
                     const py = this.y + Math.sin(beamAngle) * distance;
 
@@ -2090,8 +2641,14 @@
                 // 背景描画
                 drawBackground();
 
-                // 重力場描画（オプション）
-                if (showGravityField) {
+                // ★ 追加：パフォーマンス監視
+                monitorPerformance();
+
+                // ★ 追加：適応的品質調整
+                updateAdaptiveQuality();
+
+                // 重力場描画（最適化レベルに応じて制御）
+                if (showGravityField && performanceMonitor.optimizationLevel < 3) {
                     calculateAndDrawGravityField();
                     ctx.globalAlpha = 1.0;
                     ctx.drawImage(gravityFieldCanvas, 0, 0);
@@ -2104,7 +2661,7 @@
                 // 天体更新・描画
                 bodies.forEach(body => {
                     body.update(dt);
-                    body.draw();
+                    body.draw(); // ★ 修正：body.draw()を使用（軌跡描画含む）
                 });
 
                 // ★ 修正：パーティクル管理の最適化
@@ -2116,9 +2673,12 @@
                     }
                 }
 
-                // ★ 追加：パーティクル数制限
-                if (particles.length > 500) {
-                    particles.splice(0, particles.length - 400);
+                // ★ 修正：パーティクル数制限（最適化レベルに応じて）
+                const maxParticles = performanceMonitor.optimizationActive ?
+                    [500, 300, 200, 100, 50][performanceMonitor.optimizationLevel] : 500;
+
+                if (particles.length > maxParticles) {
+                    particles.splice(0, particles.length - maxParticles);
                 }
 
                 // 時間更新
@@ -2127,6 +2687,11 @@
                 // UI更新
                 updateDisplay();
                 updateFPS();
+
+                // ★ 追加：定期的なメモリチェック（5秒ごと）
+                if (Math.floor(time * 60) % 300 === 0) { // 5秒ごと
+                    checkMemoryUsage();
+                }
 
                 animationId = requestAnimationFrame(animate);
 
@@ -2252,6 +2817,21 @@
         document.getElementById('trailSlider').addEventListener('input', (e) => {
             trailLength = parseInt(e.target.value);
             document.getElementById('trailValue').textContent = trailLength;
+
+            // ★ 追加：軌跡長変更時の最適化リセット
+            if (performanceMonitor.optimizationActive) {
+                performanceMonitor.originalTrailLength = trailLength;
+                console.log(`軌跡長変更: ${trailLength} (最適化中)`);
+            }
+
+            // ★ 追加：軌跡長に応じた予防的品質調整
+            if (trailLength > 500) {
+                const qualityReduction = Math.min(0.8, (trailLength - 500) / 1000);
+                performanceMonitor.trailRenderQuality = Math.max(0.2, 1.0 - qualityReduction);
+                console.log(`高軌跡長 ${trailLength} - 品質を ${performanceMonitor.trailRenderQuality.toFixed(2)} に予防調整`);
+            } else if (!performanceMonitor.optimizationActive) {
+                performanceMonitor.trailRenderQuality = 1.0;
+            }
         });
 
         document.getElementById('trailToggle').addEventListener('click', () => {
@@ -2729,6 +3309,53 @@
 
         // 初期化
         try {
+            // ★ 修正：ヘルプボタンイベントを初期化セクションで確実に設定
+            const helpButton = document.getElementById('helpButton');
+            const helpOverlay = document.getElementById('helpOverlay');
+            const helpPopup = document.getElementById('helpPopup');
+            const helpCloseButton = document.getElementById('helpCloseButton');
+
+            if (helpButton && helpOverlay && helpPopup && helpCloseButton) {
+                // ヘルプボタンクリック
+                helpButton.addEventListener('click', () => {
+                    helpOverlay.style.display = 'block';
+                    helpPopup.style.display = 'block';
+                    console.log('ヘルプポップアップを表示しました');
+                });
+
+                // 閉じるボタンクリック
+                helpCloseButton.addEventListener('click', () => {
+                    helpOverlay.style.display = 'none';
+                    helpPopup.style.display = 'none';
+                    console.log('ヘルプポップアップを閉じました');
+                });
+
+                // オーバーレイクリック
+                helpOverlay.addEventListener('click', () => {
+                    helpOverlay.style.display = 'none';
+                    helpPopup.style.display = 'none';
+                    console.log('オーバーレイクリックでヘルプを閉じました');
+                });
+
+                // ESCキーでヘルプを閉じる
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && helpPopup.style.display === 'block') {
+                        helpOverlay.style.display = 'none';
+                        helpPopup.style.display = 'none';
+                        console.log('ESCキーでヘルプを閉じました');
+                    }
+                });
+
+                console.log('ヘルプ機能が正常に初期化されました');
+            } else {
+                console.error('ヘルプ要素が見つかりません:', {
+                    helpButton: !!helpButton,
+                    helpOverlay: !!helpOverlay,
+                    helpPopup: !!helpPopup,
+                    helpCloseButton: !!helpCloseButton
+                });
+            }
+
             // ★ 追加：ツールチップの初期化
             initializeTooltip();
 
@@ -2747,22 +3374,104 @@
 
             // ★ 修正：パフォーマンス監視の改善
             setInterval(() => {
-                if (currentFps < 25 && isRunning) { // ★ 修正：閾値を下げる
-                    console.warn(`Low FPS detected: ${currentFps}, Bodies: ${bodies.length}, Particles: ${particles.length}`);
+                if (bodies.length > 0 && performanceMonitor.fpsHistory.length > 0) {
+                    const avgFps = performanceMonitor.fpsHistory.reduce((a, b) => a + b, 0) / performanceMonitor.fpsHistory.length;
+                    const totalTrailPoints = bodies.reduce((sum, body) => sum + body.trail.length, 0);
 
-                    // ★ 追加：自動パフォーマンス調整
-                    if (particles.length > 200) {
-                        particles.splice(0, particles.length - 150);
-                        console.log('Particles reduced for performance');
+                    console.log(`📊 パフォーマンス統計:`, {
+                        平均FPS: avgFps.toFixed(1),
+                        現在FPS: performanceMonitor.currentFps,
+                        総軌跡点数: totalTrailPoints,
+                        最適化レベル: performanceMonitor.optimizationLevel,
+                        軌跡品質: (performanceMonitor.trailRenderQuality * 100).toFixed(0) + '%',
+                        パーティクル数: particles.length,
+                        メモリ使用量: performance.memory ? `${(performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1)}MB` : '不明'
+                    });
+
+                    // 極端に軌跡が長い場合の緊急最適化
+                    if (totalTrailPoints > 100000) {
+                        console.warn('🚨 軌跡点数が危険域に到達 - 緊急最適化実行');
+                        executeEmergencyOptimization();
                     }
                 }
-            }, 5000);
+            }, 10000); // 10秒ごと
 
-            console.log('三体問題シミュレータが初期化されました。');
+            console.log('🚀 三体問題シミュレータが初期化されました（パフォーマンス監視機能付き）');
 
         } catch (error) {
             console.error('Initialization error:', error);
             showError('初期化エラーが発生しました。');
+        }
+
+        /**
+         * ★ 追加：最適化された軌跡描画関数
+         */
+        function drawOptimizedTrail(body) {
+            if (!body.trail || body.trail.length < 3) return;
+
+            const quality = performanceMonitor.trailRenderQuality;
+            const trail = body.trail;
+
+            // 品質に応じて描画する点を間引き
+            const skipRate = Math.max(1, Math.floor(1 / quality));
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // 最適化された軌跡描画
+            for (let i = 2; i < trail.length - 1; i += skipRate) {
+                const progress = i / trail.length;
+                const alpha = progress * 0.8 * quality;
+                const width = (progress * 4 + 0.5) * quality;
+
+                const p1 = trail[i - 1];
+                const p2 = trail[i];
+
+                // シンプルな線描画（品質が低い場合）またはグラデーション（品質が高い場合）
+                if (quality < 0.5) {
+                    // 低品質：シンプルな線
+                    ctx.strokeStyle = body.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                    ctx.lineWidth = width;
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                } else {
+                    // 高品質：グラデーション線
+                    const gradient = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+                    const prevAlpha = Math.floor(((i - 1) / trail.length) * 255).toString(16).padStart(2, '0');
+                    const currAlpha = Math.floor(alpha * 255).toString(16).padStart(2, '0');
+
+                    gradient.addColorStop(0, body.color + prevAlpha);
+                    gradient.addColorStop(1, body.color + currAlpha);
+
+                    ctx.strokeStyle = gradient;
+                    ctx.lineWidth = width;
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            }
+
+            // 軌跡の終端グロー効果（高品質時のみ）
+            if (quality > 0.6 && trail.length > 0) {
+                const lastPoint = trail[trail.length - 1];
+                const glowRadius = 3 * quality;
+
+                const glowGradient = ctx.createRadialGradient(
+                    lastPoint.x, lastPoint.y, 0,
+                    lastPoint.x, lastPoint.y, glowRadius
+                );
+                glowGradient.addColorStop(0, body.color + 'AA');
+                glowGradient.addColorStop(0.5, body.color + '66');
+                glowGradient.addColorStop(1, body.color + '00');
+
+                ctx.fillStyle = glowGradient;
+                ctx.beginPath();
+                ctx.arc(lastPoint.x, lastPoint.y, glowRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     </script>
 </body>
