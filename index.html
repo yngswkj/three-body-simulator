@@ -262,7 +262,7 @@
         .value-display {
             font-size: 13px;
             color: #4ecdc4;
-            min-width: 45px;
+            min-width: 50px;
             text-align: right;
             font-weight: 500;
             padding: 4px 8px;
@@ -334,11 +334,20 @@
             gap: 10px;
         }
 
+        /* ★ 追加：物理設定コントロール用のスタイル */
+        .physics-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .trail-toggle {
             padding: 8px 12px;
             font-size: 12px;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 80px;
+            text-align: center;
         }
 
         .trail-toggle.active {
@@ -603,6 +612,14 @@
                             <span class="value-display" id="gravityValue">150</span>
                         </div>
                     </div>
+                    <div class="slider-row">
+                        <span class="slider-label">衝突判定</span>
+                        <div class="slider-container">
+                            <input type="range" id="collisionSensitivitySlider" class="slider" min="0.1" max="1.0"
+                                step="0.1" value="0.5">
+                            <span class="value-display" id="collisionSensitivityValue">0.5</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="control-section">
@@ -611,26 +628,21 @@
                         <button class="trail-toggle active" id="trailToggle">軌跡表示</button>
                         <div class="slider-container">
                             <span class="slider-label">長さ</span>
-                            <input type="range" id="trailSlider" class="slider" min="10" max="100" step="10" value="30">
+                            <input type="range" id="trailSlider" class="slider" min="10" max="10000" step="10"
+                                value="30">
                             <span class="value-display" id="trailValue">30</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- ★ 追加：衝突設定セクション -->
+                <!-- ★ 修正：衝突設定と重力場可視化を横並びに -->
                 <div class="control-section">
-                    <div class="section-title">衝突設定</div>
-                    <div class="trail-controls">
+                    <div class="section-title">物理設定</div>
+                    <div class="physics-controls">
                         <button class="trail-toggle active" id="collisionToggle">衝突有効</button>
-                    </div>
-                </div>
-
-                <!-- ★ 追加：重力場可視化セクション -->
-                <div class="control-section">
-                    <div class="section-title">重力場可視化</div>
-                    <div class="trail-controls">
                         <button class="trail-toggle" id="gravityFieldToggle">重力場非表示</button>
                     </div>
+                    <!-- ★ 追加：衝突判定の厳しさを調節するスライダー -->
                 </div>
 
                 <div class="control-section">
@@ -673,6 +685,9 @@
 
         // ★ 追加：衝突判定フラグ
         let enableCollisions = true;
+
+        // ★ 追加：衝突判定の感度パラメータ
+        let collisionSensitivity = 0.5; // 0.1(厳しい) ～ 1.0(緩い)
 
         // ★ 追加：ブラックホール関連定数
         const BLACK_HOLE_MASS_THRESHOLD = 400; // ★ 変更：ブラックホール化する質量の閾値を厳しく（200→300）
@@ -1015,36 +1030,42 @@
          */
         class Body {
             constructor(x, y, vx = 0, vy = 0, mass = 25) {
-                // 基本物理パラメータ
-                this.x = x;
-                this.y = y;
-                this.vx = vx;
-                this.vy = vy;
-                this.mass = Math.max(10, Math.min(400, mass));
+                // ★ 基本物理パラメータ
+                this.x = x;                                        // X座標位置
+                this.y = y;                                        // Y座標位置
+                this.vx = vx;                                      // X方向速度
+                this.vy = vy;                                      // Y方向速度
+                this.mass = Math.max(10, Math.min(400, mass));     // 質量（10-400の範囲）
 
-                // 視覚効果パラメータ
-                this.trail = [];
-                this.color = this.generateColor(); // ★ 修正：generatePlanetColor → generateColor
+                // ★ 視覚効果パラメータ
+                this.trail = [];                                   // 軌跡座標の配列
+                this.color = this.generateColor();                 // 天体の色
 
-                // アニメーション制御パラメータ
-                this.trailUpdateCounter = 0;
-                this.isValid = true;
-                this.pulsePhase = Math.random() * Math.PI * 2;
-                this.particleTimer = 0;
+                // ★ アニメーション制御パラメータ
+                this.trailUpdateCounter = 0;                       // 軌跡更新カウンター
+                this.isValid = true;                               // 天体が有効かどうかのフラグ
+                this.pulsePhase = Math.random() * Math.PI * 2;     // 脈動効果の位相
+                this.particleTimer = 0;                            // パーティクル生成タイマー
 
-                // 天体タイプ別パラメータ
-                this.type = this.determineBodyType();
-                this.rotation = 0;
-                this.temperature = 1.0;
-                this.magneticField = 0;
-                this.beamRotation = 0;
-                this.planets = [];
+                // ★ 天体タイプ別パラメータ
+                this.type = this.determineBodyType();              // 天体種別（normal, whiteDwarf, neutronStar等）
+                this.rotation = 0;                                 // 回転角度
+                this.temperature = 1.0;                            // 温度係数（白色矮星用）
+                this.magneticField = 0;                            // 磁場強度（中性子星・パルサー用）
+                this.beamRotation = 0;                             // ビーム回転角度（パルサー用）
+                this.planets = [];                                 // 惑星配列（惑星系用）
 
-                // ブラックホール関連
-                this.isBlackHole = this.type === 'blackHole';
-                this.blackHoleRotation = 0;
-                this.eventHorizonRadius = 0;
+                // ★ ブラックホール専用パラメータ
+                this.isBlackHole = this.type === 'blackHole';      // ブラックホールフラグ
+                this.blackHoleRotation = 0;                        // ブラックホール回転角度
+                this.eventHorizonRadius = 0;                       // 事象の地平線半径
 
+                // ★ パルサー専用パラメータ
+                this.pulsarAge = 0;                                // パルサー年齢（時間経過）
+                this.rotationPeriod = 0.001;                       // 回転周期（秒）
+                this.lastCollisionTime = 0;                        // 最後の衝突時刻
+
+                // 初期化完了
                 this.initializeByType();
             }
 
@@ -1472,27 +1493,68 @@
                 if (!this.isValid) return;
 
                 try {
-                    // 軌道描画（改良版）
-                    if (showTrails && this.trail.length > 1) {
-                        for (let i = 1; i < this.trail.length; i++) {
-                            const alpha = (i / this.trail.length) * 0.8;
-                            const width = (i / this.trail.length) * 3 + 0.5;
+                    // ★ 修正：軌道描画をなめらかなベジェ曲線で改良
+                    if (showTrails && this.trail.length > 3) {
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
 
-                            // グラデーション軌道
+                        // ★ 追加：なめらかなベジェ曲線による軌跡描画
+                        for (let i = 2; i < this.trail.length - 1; i++) {
+                            const alpha = (i / this.trail.length) * 0.8;
+                            const width = (i / this.trail.length) * 4 + 0.5;
+
+                            // 制御点の計算（カトマル・ロム スプライン）
+                            const p0 = this.trail[i - 2];
+                            const p1 = this.trail[i - 1];
+                            const p2 = this.trail[i];
+                            const p3 = this.trail[i + 1] || this.trail[i];
+
+                            // ★ 追加：なめらかなグラデーション軌道
                             const gradient = ctx.createLinearGradient(
-                                this.trail[i - 1].x, this.trail[i - 1].y,
-                                this.trail[i].x, this.trail[i].y
+                                p1.x, p1.y, p2.x, p2.y
                             );
-                            gradient.addColorStop(0, this.color + Math.floor(alpha * 128).toString(16).padStart(2, '0'));
-                            gradient.addColorStop(1, this.color + Math.floor(alpha * 255).toString(16).padStart(2, '0'));
+
+                            const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                            const prevAlphaHex = Math.floor(((i - 1) / this.trail.length) * 255).toString(16).padStart(2, '0');
+
+                            gradient.addColorStop(0, this.color + prevAlphaHex);
+                            gradient.addColorStop(1, this.color + alphaHex);
 
                             ctx.strokeStyle = gradient;
                             ctx.lineWidth = width;
-                            ctx.lineCap = 'round';
+
+                            // ★ 追加：ベジェ曲線での描画
                             ctx.beginPath();
-                            ctx.moveTo(this.trail[i - 1].x, this.trail[i - 1].y);
-                            ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                            ctx.moveTo(p1.x, p1.y);
+
+                            // 制御点の計算（平滑化）
+                            const tension = 0.3; // 張力（0-1、低いほどなめらか）
+                            const cp1x = p1.x + (p2.x - p0.x) * tension;
+                            const cp1y = p1.y + (p2.y - p0.y) * tension;
+                            const cp2x = p2.x - (p3.x - p1.x) * tension;
+                            const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+                            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
                             ctx.stroke();
+                        }
+
+                        // ★ 追加：軌跡の終端に光る効果
+                        if (this.trail.length > 0) {
+                            const lastPoint = this.trail[this.trail.length - 1];
+                            const glowRadius = 3;
+
+                            const glowGradient = ctx.createRadialGradient(
+                                lastPoint.x, lastPoint.y, 0,
+                                lastPoint.x, lastPoint.y, glowRadius
+                            );
+                            glowGradient.addColorStop(0, this.color + 'AA');
+                            glowGradient.addColorStop(0.5, this.color + '66');
+                            glowGradient.addColorStop(1, this.color + '00');
+
+                            ctx.fillStyle = glowGradient;
+                            ctx.beginPath();
+                            ctx.arc(lastPoint.x, lastPoint.y, glowRadius, 0, Math.PI * 2);
+                            ctx.fill();
                         }
                     }
 
@@ -1722,7 +1784,7 @@
                 ctx.fill();
 
                 // 事象の地平線の境界
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.strokeStyle = 'rgba(2, 2, 2, 0.3)';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([5, 5]);
                 ctx.beginPath();
@@ -1813,10 +1875,10 @@
                     const dy = bodies[j].y - bodies[i].y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
-                    // 衝突判定：半径の合計よりも近い場合
+                    // ★ 修正：衝突判定にスライダーの値を反映
                     const radius1 = Math.sqrt(bodies[i].mass) * 1.5;
                     const radius2 = Math.sqrt(bodies[j].mass) * 1.5;
-                    const collisionDistance = (radius1 + radius2) * 0.8; // 少し重なりを許容
+                    const collisionDistance = (radius1 + radius2) * collisionSensitivity; // ★ 変更：感度パラメータを使用
 
                     if (distance < collisionDistance) {
                         // 質量の大きい方を残す（質量が同じ場合はi番目を残す）
@@ -2224,6 +2286,12 @@
             }
         });
 
+        // ★ 追加：衝突判定感度スライダーのイベントリスナー
+        document.getElementById('collisionSensitivitySlider').addEventListener('input', (e) => {
+            collisionSensitivity = parseFloat(e.target.value);
+            document.getElementById('collisionSensitivityValue').textContent = collisionSensitivity.toFixed(1);
+        });
+
         // プリセット（初期速度を調整）
         function setPreset(type) {
             try {
@@ -2238,8 +2306,8 @@
 
                 switch (type) {
                     case 'binary':
-                        bodies.push(new Body(cx - 40, cy, 0, 60, 35)); // ★ 修正：パラメータ調整
-                        bodies.push(new Body(cx + 40, cy, 0, -60, 35));
+                        bodies.push(new Body(cx - 40, cy, 30, 30, 35)); // ★ 修正：パラメータ調整
+                        bodies.push(new Body(cx + 40, cy, -30, -30, 35));
                         break;
 
                     case 'triangle':
@@ -2668,6 +2736,8 @@
             document.getElementById('speedValue').textContent = speed.toFixed(1);
             document.getElementById('gravityValue').textContent = gravity;
             document.getElementById('trailValue').textContent = trailLength;
+            // ★ 追加：衝突判定感度の初期値設定
+            document.getElementById('collisionSensitivityValue').textContent = collisionSensitivity.toFixed(1);
 
             // 重力場キャンバスの初期化
             setupGravityFieldCanvas();
