@@ -69,21 +69,46 @@ let performanceMonitor = {
     lowFpsCount: 0,
     optimizationActive: false,
     originalTrailLength: trailLength,
-    targetFps: 55, // 最低限維持したいFPS
-    criticalFps: 50, // この値を下回ったら積極的に最適化
-    emergencyFps: 45, // 緊急最適化発動FPS
-    optimizationLevel: 0, // 0-4の最適化レベル
-    consecutiveLowFps: 0, // 連続低FPS回数
-    lastOptimizationTime: 0, // 最後の最適化実行時刻
-    trailRenderQuality: 1.0 // 軌跡描画品質（1.0=100%）
+    targetFps: 55,
+    criticalFps: 50,
+    emergencyFps: 45,
+    optimizationLevel: 0,
+    consecutiveLowFps: 0,
+    lastOptimizationTime: 0,
+    trailRenderQuality: 1.0,
+    // ★ 追加：初期化制御用パラメータ
+    initializationPeriod: 5000, // 5秒間は最適化を無効
+    startTime: Date.now(),
+    isInitializing: true,
+    minHistoryLength: 3 // 最低3回のFPS計測後に判定開始
 };
 
 /**
- * ★ 追加：FPS監視とパフォーマンス最適化
+ * ★ 修正：FPS監視とパフォーマンス最適化（初期化期間を考慮）
  */
 function monitorPerformance() {
     performanceMonitor.frameCount++;
     const now = Date.now();
+
+    // ★ 追加：初期化期間の判定
+    const timeSinceStart = now - performanceMonitor.startTime;
+    if (timeSinceStart < performanceMonitor.initializationPeriod) {
+        performanceMonitor.isInitializing = true;
+        // 初期化期間中はFPS履歴のみ更新、最適化は無効
+        if (now - performanceMonitor.lastFpsCheck >= 1000) {
+            performanceMonitor.currentFps = performanceMonitor.frameCount;
+            performanceMonitor.frameCount = 0;
+            performanceMonitor.lastFpsCheck = now;
+            currentFps = performanceMonitor.currentFps;
+
+            console.log(`🔄 初期化中 (残り${Math.ceil((performanceMonitor.initializationPeriod - timeSinceStart) / 1000)}秒): FPS ${performanceMonitor.currentFps}`);
+        }
+        return;
+    } else if (performanceMonitor.isInitializing) {
+        // 初期化完了
+        performanceMonitor.isInitializing = false;
+        console.log('✅ パフォーマンス監視初期化完了 - 最適化システム有効化');
+    }
 
     // 1秒ごとにFPSを計算
     if (now - performanceMonitor.lastFpsCheck >= 1000) {
@@ -97,8 +122,10 @@ function monitorPerformance() {
             performanceMonitor.fpsHistory.shift();
         }
 
-        // パフォーマンス最適化の判定
-        optimizePerformance();
+        // ★ 修正：十分な履歴が蓄積されてからパフォーマンス最適化を開始
+        if (performanceMonitor.fpsHistory.length >= performanceMonitor.minHistoryLength) {
+            optimizePerformance();
+        }
 
         // FPS表示を更新
         currentFps = performanceMonitor.currentFps;
@@ -106,30 +133,44 @@ function monitorPerformance() {
 }
 
 /**
- * ★ 追加：段階的パフォーマンス最適化システム
+ * ★ 修正：段階的パフォーマンス最適化システム（誤判定防止）
  */
 function optimizePerformance() {
+    // ★ 追加：初期化中は最適化を実行しない
+    if (performanceMonitor.isInitializing) {
+        return;
+    }
+
     const avgFps = performanceMonitor.fpsHistory.reduce((a, b) => a + b, 0) / performanceMonitor.fpsHistory.length;
     const now = Date.now();
 
-    // 連続低FPS検出
-    if (avgFps < performanceMonitor.targetFps) {
+    // ★ 修正：連続低FPS検出をより厳密に
+    const currentIsLow = performanceMonitor.currentFps < performanceMonitor.targetFps;
+    const averageIsLow = avgFps < performanceMonitor.targetFps;
+
+    if (currentIsLow && averageIsLow) {
         performanceMonitor.consecutiveLowFps++;
-    } else {
+    } else if (!currentIsLow && !averageIsLow) {
+        // 現在と平均の両方が良好な場合のみリセット
         performanceMonitor.consecutiveLowFps = Math.max(0, performanceMonitor.consecutiveLowFps - 1);
     }
 
-    // 緊急最適化（即座に実行）
-    if (avgFps < performanceMonitor.emergencyFps) {
+    // ★ 修正：緊急最適化の条件を厳しく
+    const emergencyCondition = avgFps < performanceMonitor.emergencyFps &&
+        performanceMonitor.currentFps < performanceMonitor.emergencyFps &&
+        performanceMonitor.consecutiveLowFps >= 2;
+
+    if (emergencyCondition) {
         executeEmergencyOptimization();
         return;
     }
 
-    // 段階的最適化（2秒間隔で実行）
-    if (now - performanceMonitor.lastOptimizationTime > 2000) {
-        if (performanceMonitor.consecutiveLowFps >= 2) {
+    // ★ 修正：段階的最適化の条件を厳しく（3秒間隔、連続3回低下）
+    if (now - performanceMonitor.lastOptimizationTime > 3000) {
+        if (performanceMonitor.consecutiveLowFps >= 3 && averageIsLow) {
             activateNextOptimizationLevel(avgFps);
-        } else if (performanceMonitor.optimizationActive && avgFps > performanceMonitor.targetFps) {
+        } else if (performanceMonitor.optimizationActive && avgFps > performanceMonitor.targetFps + 5) {
+            // ★ 修正：緩和条件を厳しく（目標FPS + 5以上で緩和）
             relaxOptimization();
         }
         performanceMonitor.lastOptimizationTime = now;
@@ -1940,7 +1981,19 @@ document.getElementById('reset').addEventListener('click', () => {
         time = 0;
         errorCount = 0;
         updateDisplay();
+
+        // ★ 追加：停止中でも天体を描画
+        if (!isRunning) {
+            drawBackground();
+            bodies.forEach(body => {
+                if (body.isValid) {
+                    body.draw();
+                }
+            });
+        }
     }
+
+    console.log('シミュレーションをリセットしました');
 });
 
 document.getElementById('clear').addEventListener('click', () => {
@@ -1950,7 +2003,9 @@ document.getElementById('clear').addEventListener('click', () => {
     time = 0;
     errorCount = 0;
     updateDisplay();
-    drawBackground();
+    drawBackground(); // 停止中でも背景は常に描画
+
+    console.log('天体をクリアしました');
 });
 
 // スライダー
@@ -2129,17 +2184,6 @@ function drawBackground() {
             ctx.fill();
         }
     }
-}
-
-// タッチ・マウスイベント
-function getEventPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
-    };
 }
 
 function findBodyAt(x, y) {
@@ -2426,14 +2470,38 @@ function handleStart(e) {
         canvas.style.cursor = 'grabbing';
         hideTooltip(); // ドラッグ開始時はツールチップを非表示
     } else {
-        // 新しい天体を作成（初期速度を小さく調整）
+        // ★ 修正：シミュレーション状態に関係なく新しい天体を作成
         if (bodies.length < 20) {
             const newBody = new Body(pos.x, pos.y,
                 (Math.random() - 0.5) * 50,
                 (Math.random() - 0.5) * 50,
                 20 + Math.random() * 15);
             bodies.push(newBody);
+
+            // ★ 追加：プリセット状態をクリアして手動配置モードに移行
+            if (currentPresetType) {
+                console.log(`手動天体追加により${currentPresetType}プリセット状態を解除`);
+                currentPresetType = null;
+            }
+
             updateDisplay();
+
+            // ★ 追加：シミュレーション停止中でも天体を描画
+            if (!isRunning) {
+                drawBackground();
+                // 全ての天体を描画
+                bodies.forEach(body => {
+                    if (body.isValid) {
+                        body.draw();
+                    }
+                });
+                console.log(`停止中に新しい天体を追加: 座標(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}), 質量${newBody.mass.toFixed(1)}`);
+            } else {
+                console.log(`新しい天体を追加: 座標(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}), 質量${newBody.mass.toFixed(1)}`);
+            }
+        } else {
+            console.warn('天体数が上限（20個）に達しています');
+            showError('天体数が上限（20個）に達しています。クリアしてから追加してください。');
         }
         hideTooltip();
     }
@@ -2448,10 +2516,30 @@ function handleMove(e) {
         selectedBody.vx = 0;
         selectedBody.vy = 0;
         selectedBody.trail = [];
+
+        // ★ 追加：ドラッグ中にシミュレーション停止中でも描画を更新
+        if (!isRunning) {
+            drawBackground();
+            bodies.forEach(body => {
+                if (body.isValid) {
+                    body.draw();
+                }
+            });
+        }
     }
 }
 
 function handleEnd(e) {
+    // ★ 追加：ドラッグ終了時に停止中なら最終描画
+    if (isDragging && selectedBody && !isRunning) {
+        drawBackground();
+        bodies.forEach(body => {
+            if (body.isValid) {
+                body.draw();
+            }
+        });
+    }
+
     isDragging = false;
     selectedBody = null;
     canvas.style.cursor = 'crosshair';
@@ -2523,8 +2611,13 @@ try {
     updateDisplay();
     drawBackground();
 
-    // ★ 修正：パフォーマンス監視の改善
+    // ★ 修正：パフォーマンス監視の改善（初期化考慮）
     setInterval(() => {
+        // ★ 追加：初期化期間中は詳細ログを出力しない
+        if (performanceMonitor.isInitializing) {
+            return;
+        }
+
         if (bodies.length > 0 && performanceMonitor.fpsHistory.length > 0) {
             const avgFps = performanceMonitor.fpsHistory.reduce((a, b) => a + b, 0) / performanceMonitor.fpsHistory.length;
             const totalTrailPoints = bodies.reduce((sum, body) => sum + body.trail.length, 0);
@@ -2536,6 +2629,7 @@ try {
                 最適化レベル: performanceMonitor.optimizationLevel,
                 軌跡品質: (performanceMonitor.trailRenderQuality * 100).toFixed(0) + '%',
                 パーティクル数: particles.length,
+                連続低FPS回数: performanceMonitor.consecutiveLowFps,
                 メモリ使用量: performance.memory ? `${(performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1)}MB` : '不明'
             });
 
@@ -2547,7 +2641,7 @@ try {
         }
     }, 10000); // 10秒ごと
 
-    console.log('🚀 三体問題シミュレータが初期化されました（パフォーマンス監視機能付き）');
+    console.log('🚀 三体問題シミュレータが初期化されました（改良版パフォーマンス監視機能付き）');
 
 } catch (error) {
     console.error('Initialization error:', error);
