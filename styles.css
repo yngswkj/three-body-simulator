@@ -34,9 +34,7 @@ body::before {
     flex-direction: column;
     min-height: 100vh;
     max-height: 100vh;
-    /* ★ 追加：最大高さを画面サイズに制限 */
     overflow: hidden;
-    /* ★ 追加：スクロールバーを防ぐ */
 }
 
 .header {
@@ -82,9 +80,7 @@ body::before {
     position: relative;
     background: radial-gradient(circle at center, rgba(26, 26, 58, 0.8) 0%, rgba(15, 15, 35, 0.9) 100%);
     min-height: 300px;
-    /* ★ 変更：最小高さを小さく */
     overflow: hidden;
-    /* ★ 追加：オーバーフローを防ぐ */
 }
 
 #canvas {
@@ -100,29 +96,22 @@ body::before {
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(20px);
     padding: 15px;
-    /* ★ 変更：パディングを小さく */
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
     flex-shrink: 0;
-    /* ★ 追加：コントロールパネルが縮まないようにする */
     max-height: 40vh;
-    /* ★ 追加：最大高さを画面の40%に制限 */
     overflow-y: auto;
-    /* ★ 追加：必要に応じてスクロール */
 }
 
 .main-controls {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-    /* ★ 変更：ギャップを小さく */
     margin-bottom: 15px;
-    /* ★ 変更：マージンを小さく */
 }
 
 .control-section {
     margin-bottom: 12px;
-    /* ★ 変更：マージンを小さく */
 }
 
 .control-section:last-child {
@@ -143,10 +132,8 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: white;
     padding: 12px 14px;
-    /* ★ 変更：パディングを小さく */
     border-radius: 12px;
     font-size: 13px;
-    /* ★ 変更：フォントサイズを小さく */
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-weight: 500;
@@ -189,9 +176,7 @@ button.active {
     display: flex;
     align-items: center;
     gap: 10px;
-    /* ★ 変更：ギャップを小さく */
     margin-bottom: 10px;
-    /* ★ 変更：マージンを小さく */
 }
 
 .slider-row:last-child {
@@ -277,16 +262,40 @@ button.active {
 
 .preset-btn {
     padding: 10px 8px;
-    /* ★ 変更：パディングを小さく */
     font-size: 11px;
-    /* ★ 変更：フォントサイズを小さく */
     background: linear-gradient(135deg, rgba(78, 205, 196, 0.8) 0%, rgba(68, 160, 141, 0.8) 100%);
     border: 1px solid rgba(78, 205, 196, 0.3);
 }
 
-.info {
+/* ★ FPS表示（左上に固定） */
+.fps-display {
     position: absolute;
     top: 15px;
+    left: 15px;
+    font-size: 14px;
+    color: #4ecdc4;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 8px 12px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    font-weight: 500;
+    z-index: 100;
+    min-width: 70px;
+    text-align: center;
+}
+
+.fps-display::before {
+    content: 'FPS: ';
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+}
+
+/* ★ 情報パネル（FPS表示の下に移動） */
+.info {
+    position: absolute;
+    top: 60px;
+    /* ★ FPS表示の下に配置 */
     left: 15px;
     font-size: 12px;
     color: rgba(255, 255, 255, 0.8);
@@ -319,14 +328,80 @@ button.active {
     margin-left: 10px;
 }
 
-.trail-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* ★ イベント統計表示（常に表示） */
+.event-stats {
+    margin-top: 15px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
 }
 
-/* ★ 追加：物理設定コントロール用のスタイル */
-.physics-controls {
+.event-stats-content {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.event-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+}
+
+.event-stat-row:last-child {
+    margin-bottom: 0;
+}
+
+.event-stat-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 11px;
+}
+
+.event-stat-value {
+    color: #4ecdc4;
+    font-weight: 500;
+    font-size: 12px;
+}
+
+.event-stat-value.rare {
+    color: #ff9500;
+}
+
+.event-stat-value.legendary {
+    color: #ff6b6b;
+    text-shadow: 0 0 5px rgba(255, 107, 107, 0.3);
+}
+
+.event-total {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.event-total .event-stat-label {
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.event-total .event-stat-value {
+    color: #74b9ff;
+    font-weight: bold;
+}
+
+.event-stats-empty {
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+    text-align: center;
+    padding: 8px;
+    font-size: 11px;
+}
+
+.trail-controls, .physics-controls {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -361,7 +436,7 @@ button.active {
     z-index: 1000;
 }
 
-/* ★ 追加：ツールチップのスタイル */
+/* ★ ツールチップのスタイル */
 .tooltip {
     position: absolute;
     background: rgba(0, 0, 0, 0.9);
@@ -406,7 +481,7 @@ button.active {
     margin-left: 10px;
 }
 
-/* ★ 追加：特殊天体タイプ別の色分け */
+/* 特殊天体タイプ別の色分け */
 .tooltip.pulsar .tooltip-title {
     color: #00FFFF;
 }
@@ -427,6 +502,158 @@ button.active {
     color: #FFD700;
 }
 
+/* ★ ヘルプボタンのスタイル */
+.help-button {
+    background: rgba(116, 185, 255, 0.2);
+    border: 1px solid rgba(116, 185, 255, 0.4);
+    color: #74b9ff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 10px;
+    font-weight: bold;
+}
+
+.help-button:hover {
+    background: rgba(116, 185, 255, 0.3);
+    border-color: rgba(116, 185, 255, 0.6);
+    transform: scale(1.1);
+}
+
+/* ★ ヘルプポップアップのスタイル */
+.help-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1999;
+    display: none;
+}
+
+.help-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(20px);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    z-index: 2000;
+    display: none;
+    border: 1px solid rgba(116, 185, 255, 0.3);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    max-width: 450px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.help-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(116, 185, 255, 0.2);
+    padding-bottom: 10px;
+}
+
+.help-popup-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #74b9ff;
+}
+
+.help-close-button {
+    background: rgba(255, 107, 107, 0.2);
+    border: 1px solid rgba(255, 107, 107, 0.4);
+    color: #ff6b6b;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.help-close-button:hover {
+    background: rgba(255, 107, 107, 0.3);
+    border-color: rgba(255, 107, 107, 0.6);
+    transform: scale(1.1);
+}
+
+.help-section {
+    margin-bottom: 12px;
+}
+
+.help-section:last-child {
+    margin-bottom: 0;
+}
+
+.help-section-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #4ecdc4;
+    margin-bottom: 6px;
+}
+
+.help-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border-left: 2px solid #4ecdc4;
+}
+
+.help-item:last-child {
+    margin-bottom: 0;
+}
+
+.help-icon {
+    font-size: 16px;
+    margin-right: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.help-text {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+/* グロー効果 */
+.glow {
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    from {
+        box-shadow: 0 0 5px rgba(78, 205, 196, 0.2);
+    }
+
+    to {
+        box-shadow: 0 0 20px rgba(78, 205, 196, 0.4);
+    }
+}
+
+/* ★ レスポンシブデザイン */
 @media (max-width: 380px) {
     .header h1 {
         font-size: 20px;
@@ -452,34 +679,35 @@ button.active {
     }
 }
 
-/* 追加のグロー効果 */
-.glow {
-    animation: glow 2s ease-in-out infinite alternate;
-}
-
-@keyframes glow {
-    from {
-        box-shadow: 0 0 5px rgba(78, 205, 196, 0.2);
+@media (max-width: 767px) {
+    .event-stats {
+        margin-top: 10px;
+        padding: 8px;
     }
 
-    to {
-        box-shadow: 0 0 20px rgba(78, 205, 196, 0.4);
+    .event-stat-row {
+        padding: 3px 6px;
+        margin-bottom: 3px;
+    }
+
+    .event-stat-label {
+        font-size: 10px;
+    }
+
+    .event-stat-value {
+        font-size: 11px;
     }
 }
 
-/* ★ 追加：大画面用のメディアクエリ */
 @media (min-width: 768px) {
     .header {
-        /* ヘッダーは大画面でも上部に固定 */
         flex-shrink: 0;
     }
 
     .container {
-        /* コンテナは縦方向のまま */
         flex-direction: column;
     }
 
-    /* 新しいコンテナでcanvasとcontrolsを横並びに */
     .main-content {
         display: flex;
         flex-direction: row;
@@ -490,21 +718,15 @@ button.active {
     .canvas-container {
         flex: 1;
         min-height: calc(100vh - 120px);
-        /* ヘッダー分を除いた高さ */
     }
 
     .controls {
-        width: 380px;
-        /* 固定幅 */
+        width: 420px;
         max-height: calc(100vh - 120px);
-        /* ヘッダー分を除いた高さ */
         padding: 20px;
         border-top: none;
-        /* 上ボーダーを削除 */
         border-left: 1px solid rgba(255, 255, 255, 0.1);
-        /* 左ボーダーを追加 */
         box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
-        /* 左側シャドウ */
     }
 
     .main-controls {
@@ -532,172 +754,17 @@ button.active {
     }
 }
 
-/* ★ 追加：超大画面用の調整 */
 @media (min-width: 1200px) {
     .controls {
-        width: 380px;
-        /* 超大画面では幅を少し広く */
+        width: 450px;
     }
 }
 
-/* ★ 追加：ヘルプボタンのスタイル */
-.help-button {
-    background: rgba(116, 185, 255, 0.2);
-    border: 1px solid rgba(116, 185, 255, 0.4);
-    color: #74b9ff;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 10px;
-    font-weight: bold;
-}
-
-.help-button:hover {
-    background: rgba(116, 185, 255, 0.3);
-    border-color: rgba(116, 185, 255, 0.6);
-    transform: scale(1.1);
-}
-
-/* ★ 追加：ヘルプポップアップのスタイル */
-.help-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.95);
-    backdrop-filter: blur(20px);
-    color: white;
-    padding: 15px 20px;
-    /* 縦方向のパディングを削減 */
-    border-radius: 12px;
-    /* 角丸を少し小さく */
-    font-size: 13px;
-    /* フォントサイズを少し小さく */
-    line-height: 1.4;
-    /* 行間を縮める */
-    z-index: 2000;
-    display: none;
-    border: 1px solid rgba(116, 185, 255, 0.3);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    max-width: 450px;
-    /* 最大幅を少し小さく */
-    width: 90%;
-    max-height: 85vh;
-    /* 最大高さを画面の85%に制限 */
-    overflow-y: auto;
-    /* 縦スクロールを有効化 */
-}
-
-.help-popup-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    /* マージンを削減 */
-    border-bottom: 1px solid rgba(116, 185, 255, 0.2);
-    padding-bottom: 10px;
-    /* パディングを削減 */
-}
-
-.help-popup-title {
-    font-size: 16px;
-    /* タイトルサイズを少し小さく */
-    font-weight: bold;
-    color: #74b9ff;
-}
-
-.help-close-button {
-    background: rgba(255, 107, 107, 0.2);
-    border: 1px solid rgba(255, 107, 107, 0.4);
-    color: #ff6b6b;
-    width: 28px;
-    /* サイズを少し小さく */
-    height: 28px;
-    border-radius: 50%;
-    font-size: 14px;
-    /* フォントサイズを小さく */
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.help-close-button:hover {
-    background: rgba(255, 107, 107, 0.3);
-    border-color: rgba(255, 107, 107, 0.6);
-    transform: scale(1.1);
-}
-
-.help-section {
-    margin-bottom: 12px;
-    /* マージンを削減 */
-}
-
-.help-section:last-child {
-    margin-bottom: 0;
-}
-
-.help-section-title {
-    font-size: 14px;
-    /* セクションタイトルを小さく */
-    font-weight: bold;
-    color: #4ecdc4;
-    margin-bottom: 6px;
-    /* マージンを削減 */
-}
-
-.help-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 4px;
-    /* マージンを大幅削減 */
-    padding: 6px 10px;
-    /* パディングを削減 */
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-    /* 角丸を小さく */
-    border-left: 2px solid #4ecdc4;
-    /* ボーダーを細く */
-}
-
-.help-item:last-child {
-    margin-bottom: 0;
-}
-
-.help-icon {
-    font-size: 16px;
-    /* アイコンサイズを小さく */
-    margin-right: 10px;
-    /* マージンを削減 */
-    min-width: 20px;
-    /* 最小幅を削減 */
-    text-align: center;
-}
-
-.help-text {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-    /* テキストサイズを小さく */
-    line-height: 1.3;
-    /* 行間を縮める */
-}
-
-/* ★ 追加：モバイル用の追加最適化 */
 @media (max-height: 600px) {
     .help-popup {
         max-height: 90vh;
-        /* 小さい画面では90%まで */
         padding: 12px 15px;
-        /* さらにパディングを削減 */
         font-size: 12px;
-        /* フォントサイズをさらに小さく */
     }
 
     .help-popup-title {
@@ -724,206 +791,6 @@ button.active {
     }
 }
 
-/* ★ 追加：超小画面用（横向きスマホなど） */
-@media (max-height: 450px) {
-    .help-popup {
-        max-height: 95vh;
-        padding: 8px 12px;
-        font-size: 11px;
-    }
-
-    .help-popup-header {
-        margin-bottom: 8px;
-        padding-bottom: 6px;
-    }
-
-    .help-section {
-        margin-bottom: 8px;
-    }
-
-    .help-section-title {
-        font-size: 12px;
-        margin-bottom: 4px;
-    }
-
-    .help-item {
-        padding: 3px 6px;
-        margin-bottom: 2px;
-    }
-}
-
-/* ★ 修正：ヘルプポップアップのスタイルをスリム化 */
-.help-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.95);
-    backdrop-filter: blur(20px);
-    color: white;
-    padding: 15px 20px;
-    /* 縦方向のパディングを削減 */
-    border-radius: 12px;
-    /* 角丸を少し小さく */
-    font-size: 13px;
-    /* フォントサイズを少し小さく */
-    line-height: 1.4;
-    /* 行間を縮める */
-    z-index: 2000;
-    display: none;
-    border: 1px solid rgba(116, 185, 255, 0.3);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    max-width: 450px;
-    /* 最大幅を少し小さく */
-    width: 90%;
-    max-height: 85vh;
-    /* 最大高さを画面の85%に制限 */
-    overflow-y: auto;
-    /* 縦スクロールを有効化 */
-}
-
-.help-popup-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    /* マージンを削減 */
-    border-bottom: 1px solid rgba(116, 185, 255, 0.2);
-    padding-bottom: 10px;
-    /* パディングを削減 */
-}
-
-.help-popup-title {
-    font-size: 16px;
-    /* タイトルサイズを少し小さく */
-    font-weight: bold;
-    color: #74b9ff;
-}
-
-.help-close-button {
-    background: rgba(255, 107, 107, 0.2);
-    border: 1px solid rgba(255, 107, 107, 0.4);
-    color: #ff6b6b;
-    width: 28px;
-    /* サイズを少し小さく */
-    height: 28px;
-    border-radius: 50%;
-    font-size: 14px;
-    /* フォントサイズを小さく */
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.help-close-button:hover {
-    background: rgba(255, 107, 107, 0.3);
-    border-color: rgba(255, 107, 107, 0.6);
-    transform: scale(1.1);
-}
-
-.help-section {
-    margin-bottom: 12px;
-    /* マージンを削減 */
-}
-
-.help-section:last-child {
-    margin-bottom: 0;
-}
-
-.help-section-title {
-    font-size: 14px;
-    /* セクションタイトルを小さく */
-    font-weight: bold;
-    color: #4ecdc4;
-    margin-bottom: 6px;
-    /* マージンを削減 */
-}
-
-.help-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 4px;
-    /* マージンを大幅削減 */
-    padding: 6px 10px;
-    /* パディングを削減 */
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-    /* 角丸を小さく */
-    border-left: 2px solid #4ecdc4;
-    /* ボーダーを細く */
-}
-
-.help-item:last-child {
-    margin-bottom: 0;
-}
-
-.help-icon {
-    font-size: 16px;
-    /* アイコンサイズを小さく */
-    margin-right: 10px;
-    /* マージンを削減 */
-    min-width: 20px;
-    /* 最小幅を削減 */
-    text-align: center;
-}
-
-.help-text {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-    /* テキストサイズを小さく */
-    line-height: 1.3;
-    /* 行間を縮める */
-}
-
-.help-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 1999;
-    display: none;
-}
-
-/* ★ 追加：モバイル用の追加最適化 */
-@media (max-height: 600px) {
-    .help-popup {
-        max-height: 90vh;
-        /* 小さい画面では90%まで */
-        padding: 12px 15px;
-        /* さらにパディングを削減 */
-        font-size: 12px;
-        /* フォントサイズをさらに小さく */
-    }
-
-    .help-popup-title {
-        font-size: 15px;
-    }
-
-    .help-section-title {
-        font-size: 13px;
-    }
-
-    .help-text {
-        font-size: 11px;
-    }
-
-    .help-item {
-        padding: 4px 8px;
-        margin-bottom: 3px;
-    }
-
-    .help-icon {
-        font-size: 14px;
-        margin-right: 8px;
-        min-width: 18px;
-    }
-}
-
-/* ★ 追加：超小画面用（横向きスマホなど） */
 @media (max-height: 450px) {
     .help-popup {
         max-height: 95vh;

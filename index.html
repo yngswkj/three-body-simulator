@@ -8,7 +8,7 @@
     <meta name="description" content="リアルタイム三体問題シミュレーター。重力相互作用による天体の軌道を可視化します。">
     <link rel="icon" type="image/x-icon" href="favicon.png">
     <link rel="stylesheet" href="styles.css">
-    <script src="simulator.js" defer></script>
+    <script type="module" src="simulator.js" defer></script>
 </head>
 
 <body>
@@ -21,71 +21,14 @@
             </div>
         </div>
 
-        <!-- ★ 追加：ヘルプポップアップ -->
-        <div class="help-overlay" id="helpOverlay"></div>
-        <div class="help-popup" id="helpPopup">
-            <div class="help-popup-header">
-                <div class="help-popup-title">操作ガイド</div>
-                <button class="help-close-button" id="helpCloseButton">×</button>
-            </div>
-
-            <div class="help-section">
-                <div class="help-section-title">基本操作</div>
-                <div class="help-item">
-                    <div class="help-icon">🖱️</div>
-                    <div class="help-text">クリック/タップ: 空いている場所に新しい天体を配置（最大20個）</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">👆</div>
-                    <div class="help-text">ドラッグ: 天体を移動（速度がリセットされます）</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">📱</div>
-                    <div class="help-text">ホバー/長押し: 天体の詳細情報を表示</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">✨</div>
-                    <div class="help-text">プリセット状態でも自由に天体を追加可能</div>
-                </div>
-            </div>
-
-            <div class="help-section">
-                <div class="help-section-title">コントロール</div>
-                <div class="help-item">
-                    <div class="help-icon">⚙️</div>
-                    <div class="help-text">プリセット: 既知の安定軌道配置を簡単設定</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">🎛️</div>
-                    <div class="help-text">スライダー: シミュレーション速度、重力、軌跡を調整</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">💥</div>
-                    <div class="help-text">衝突判定: 天体同士の衝突・合体をオン/オフ</div>
-                </div>
-            </div>
-
-            <div class="help-section">
-                <div class="help-section-title">天体の種類</div>
-                <div class="help-item">
-                    <div class="help-icon">⭐</div>
-                    <div class="help-text">通常星 → 白色矮星 → 中性子星/パルサー → ブラックホール</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">🌟</div>
-                    <div class="help-text">質量が増加すると天体が進化し、異なる物理効果を発現</div>
-                </div>
-                <div class="help-item">
-                    <div class="help-icon">🪐</div>
-                    <div class="help-text">惑星系: 大質量星の周りに惑星が自動生成</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ★ 追加：大画面用のメインコンテンツラッパー -->
+        <!-- ★ 追加：メインコンテント用のコンテナ -->
         <div class="main-content">
             <div class="canvas-container">
                 <canvas id="canvas"></canvas>
+
+                <!-- ★ 追加：FPS表示（左上に固定） -->
+                <div class="fps-display" id="fpsDisplay">60</div>
+
                 <div class="info">
                     <div class="info-row">
                         <span class="info-label">天体数</span>
@@ -99,10 +42,7 @@
                         <span class="info-label">エネルギー</span>
                         <span class="info-value" id="energyDisplay">0</span>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">FPS</span>
-                        <span class="info-value" id="fpsDisplay">60</span>
-                    </div>
+                    <!-- ★ 削除：FPS行を削除（別途表示するため） -->
                 </div>
                 <div class="error-message" id="errorMessage">
                     シミュレーションが不安定になりました。リセットしてください。
@@ -168,11 +108,133 @@
                 <div class="control-section">
                     <div class="section-title">プリセット配置</div>
                     <div class="preset-buttons">
-                        <button class="preset-btn" onclick="setPreset('binary')">連星系</button>
-                        <button class="preset-btn" onclick="setPreset('triangle')">三角配置</button>
-                        <button class="preset-btn" onclick="setPreset('figure_eight')">8の字軌道</button>
-                        <button class="preset-btn" onclick="setPreset('random')">ランダム</button>
+                        <button class="preset-btn" id="presetBinary">連星系</button>
+                        <button class="preset-btn" id="presetTriangle">三角配置</button>
+                        <button class="preset-btn" id="presetFigureEight">8の字軌道</button>
+                        <button class="preset-btn" id="presetRandom">ランダム</button>
                     </div>
+                </div>
+
+                <!-- ★ 追加：イベント統計表示 -->
+                <div class="event-stats" id="eventStats" style="display: none;">
+                    <div class="section-title">🌟 特殊イベント統計</div>
+                    <div class="event-stats-content" id="eventStatsContent">
+                        <!-- JavaScriptで動的に更新 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ★ 追加：ヘルプポップアップ -->
+        <div class="help-overlay" id="helpOverlay"></div>
+        <div class="help-popup" id="helpPopup">
+            <div class="help-popup-header">
+                <div class="help-popup-title">📚 操作ガイド & イベント情報</div>
+                <button class="help-close-button" id="helpCloseButton">×</button>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">🎮 基本操作</div>
+                <div class="help-item">
+                    <div class="help-icon">🖱️</div>
+                    <div class="help-text">クリック: 新しい天体を作成</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">👆</div>
+                    <div class="help-text">ドラッグ: 天体を移動（実行中でも可能）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🎯</div>
+                    <div class="help-text">ホバー: 天体の詳細情報を表示</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">⚙️ コントロール</div>
+                <div class="help-item">
+                    <div class="help-icon">▶️</div>
+                    <div class="help-text">開始/停止: シミュレーションの実行制御</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🔄</div>
+                    <div class="help-text">リセット: 選択中のプリセットを再実行</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🗑️</div>
+                    <div class="help-text">クリア: すべての天体を削除</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">🎨 表示設定</div>
+                <div class="help-item">
+                    <div class="help-icon">🌟</div>
+                    <div class="help-text">軌跡表示: 天体の軌跡をon/off</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🌊</div>
+                    <div class="help-text">重力場表示: 重力の強さを色で可視化</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">💥</div>
+                    <div class="help-text">衝突判定: 天体同士の衝突をon/off</div>
+                </div>
+            </div>
+
+            <!-- ★ 追加：特殊イベント情報セクション -->
+            <div class="help-section">
+                <div class="help-section-title">✨ 特殊イベント</div>
+                <div class="help-item">
+                    <div class="help-icon">⚡</div>
+                    <div class="help-text"><strong>宇宙嵐</strong> - いつでも発生可能な基本イベント</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">☀️</div>
+                    <div class="help-text"><strong>太陽フレア</strong> - 恒星タイプの天体が存在する時</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🔬</div>
+                    <div class="help-text"><strong>ホーキング輻射</strong> - ブラックホールが存在する時（レア）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🔍</div>
+                    <div class="help-text"><strong>重力レンズ効果</strong> - ブラックホール+3体以上（レア）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🌈</div>
+                    <div class="help-text"><strong>完璧な整列</strong> - 3体以上が直線状に並んだ時（伝説）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">💫</div>
+                    <div class="help-text"><strong>ブラックホール合体</strong> - 2体以上のブラックホール（伝説）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🎵</div>
+                    <div class="help-text"><strong>共鳴ハーモニー</strong> - 安定した軌道パターン（伝説）</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">📊 発生条件</div>
+                <div class="help-item">
+                    <div class="help-icon">📈</div>
+                    <div class="help-text">天体数が多いほど発生率上昇</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🕰️</div>
+                    <div class="help-text">長時間実行で発生率上昇（2分後・5分後）</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🔴</div>
+                    <div class="help-text">ブラックホール存在で発生率3倍</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">🎯</div>
+                    <div class="help-text">特殊配置（整列・接近・連星）で発生率大幅上昇</div>
+                </div>
+                <div class="help-item">
+                    <div class="help-icon">⏰</div>
+                    <div class="help-text">イベント間のクールダウン: 30秒</div>
                 </div>
             </div>
         </div>
