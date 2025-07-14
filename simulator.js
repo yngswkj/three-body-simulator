@@ -28,6 +28,7 @@ import {
 import { ParticleSystem } from './js/particles.js';
 import { Body } from './js/body.js';
 import { SpecialEventsManager } from './js/specialEvents.js';
+import { mobileOptimization } from './js/mobile-optimization.js';
 
 // グローバル変数
 const canvas = document.getElementById('canvas');
@@ -136,6 +137,13 @@ function animate() {
     if (!isRunning) return;
 
     try {
+        // ★ 追加：モバイル最適化によるフレームスキップ
+        frameCount++;
+        if (mobileOptimization.shouldSkipFrame(frameCount)) {
+            animationId = requestAnimationFrame(animate);
+            return;
+        }
+
         // 背景描画
         drawBackground(ctx, canvas);
 
@@ -182,8 +190,10 @@ function animate() {
         // パーティクル管理
         particleSystem.update(ctx);
 
-        // パーティクル数制限
-        const maxParticles = performanceMonitor.getMaxParticles();
+        // パーティクル数制限（モバイル最適化適用）
+        const baseMaxParticles = performanceMonitor.getMaxParticles();
+        const mobileMaxParticles = mobileOptimization.getParticleLimit();
+        const maxParticles = Math.min(baseMaxParticles, mobileMaxParticles);
         particleSystem.limitParticles(maxParticles);
 
         // ★ 追加：ブラックホールのデバッグ情報（パーティクルシステム状態も含む）
@@ -619,6 +629,68 @@ try {
             helpOverlay.style.display = 'none';
             helpPopup.style.display = 'none';
             console.log('オーバーレイクリックでヘルプを閉じました');
+        });
+
+        // ★ 追加：コントロールパネルトグル機能
+        const controlsToggle = document.getElementById('controlsToggle');
+        const controlsPanel = document.querySelector('.controls');
+        let isControlsVisible = !mobileOptimization.isMobile; // デスクトップでは初期表示
+
+        if (controlsToggle && controlsPanel) {
+            // モバイルでは初期状態で折りたたみ
+            if (mobileOptimization.isMobile) {
+                controlsPanel.classList.add('collapsed');
+                controlsToggle.textContent = '⚙️';
+                controlsToggle.classList.remove('active');
+            }
+
+            controlsToggle.addEventListener('click', () => {
+                isControlsVisible = !isControlsVisible;
+                
+                if (isControlsVisible) {
+                    controlsPanel.classList.remove('collapsed');
+                    controlsToggle.textContent = '✕';
+                    controlsToggle.classList.add('active');
+                    console.log('📱 コントロールパネルを表示');
+                } else {
+                    controlsPanel.classList.add('collapsed');
+                    controlsToggle.textContent = '⚙️';
+                    controlsToggle.classList.remove('active');
+                    console.log('📱 コントロールパネルを非表示');
+                }
+            });
+
+            // 画面回転時の調整
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    mobileOptimization.adjustForOrientation();
+                    console.log('📱 画面回転を検出 - レイアウトを調整');
+                }, 100);
+            });
+
+            console.log('📱 コントロールパネルトグル機能を初期化');
+        }
+
+        // ★ 追加：メモリ最適化イベントリスナー
+        window.addEventListener('memoryOptimizationRequired', (event) => {
+            console.warn('💾 メモリ最適化要求を受信:', event.detail);
+            
+            // 軌跡を短縮
+            bodies.forEach(body => {
+                if (body.trail && body.trail.length > 10) {
+                    body.trail = body.trail.slice(-10);
+                }
+            });
+            
+            // パーティクルシステムをクリア
+            if (particleSystem) {
+                particleSystem.clearAll();
+            }
+            
+            // 特殊イベントをリセット
+            specialEventsManager.resetStats();
+            
+            console.log('💾 メモリ最適化を実行しました');
         });
 
         document.addEventListener('keydown', (e) => {

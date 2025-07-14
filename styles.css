@@ -338,6 +338,8 @@ button.active {
     backdrop-filter: blur(10px);
 }
 
+/* ★ モバイル用イベント統計の調整（上記で移動済み） */
+
 .event-stats-content {
     font-size: 12px;
     line-height: 1.4;
@@ -654,9 +656,113 @@ button.active {
 }
 
 /* ★ レスポンシブデザイン */
+/* ★ コントロールパネルの折りたたみ機能 */
+.controls-toggle {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 1001;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.controls-toggle:hover {
+    background: rgba(0, 0, 0, 0.9);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.controls-toggle.active {
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.9) 0%, rgba(238, 90, 36, 0.9) 100%);
+    color: white;
+}
+
+/* ★ コントロールパネルの折りたたみ状態 */
+.controls.collapsed {
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ★ モバイル用の最適化 */
+@media (max-width: 767px) {
+    .controls-toggle {
+        display: flex;
+    }
+    
+    .controls {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        background: rgba(0, 0, 0, 0.95);
+        backdrop-filter: blur(25px);
+        border: none;
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        padding: 80px 20px 20px 20px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    
+    .controls.collapsed {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .canvas-container {
+        width: 100%;
+        height: 100vh;
+        min-height: 100vh;
+    }
+    
+    /* 情報パネルを右上に移動（モバイル時）*/
+    .info {
+        top: 15px;
+        left: auto;
+        right: 80px;
+        font-size: 11px;
+        padding: 8px 12px;
+        max-width: 150px;
+    }
+    
+    .fps-display {
+        top: 15px;
+        left: auto;
+        right: 240px;
+        font-size: 12px;
+        padding: 6px 10px;
+        min-width: 60px;
+    }
+}
+
+/* ★ 小画面スマートフォン用最適化 */
 @media (max-width: 380px) {
     .header h1 {
-        font-size: 20px;
+        font-size: 18px;
+    }
+    
+    .header .subtitle {
+        font-size: 11px;
     }
 
     .main-controls {
@@ -665,21 +771,60 @@ button.active {
     }
 
     button {
-        padding: 12px 14px;
-        font-size: 13px;
+        padding: 10px 12px;
+        font-size: 12px;
     }
 
     .preset-buttons {
         grid-template-columns: 1fr;
     }
 
-    .header .instructions {
+    .controls {
+        padding: 70px 15px 15px 15px;
+    }
+    
+    .info {
+        right: 70px;
         font-size: 10px;
-        padding: 6px 10px;
+        padding: 6px 8px;
+        max-width: 120px;
+    }
+    
+    .fps-display {
+        right: 200px;
+        font-size: 11px;
+        padding: 4px 8px;
+        min-width: 50px;
+    }
+    
+    .controls-toggle {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
     }
 }
 
-@media (max-width: 767px) {
+/* ★ タブレット・中型画面用の最適化 */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .controls {
+        width: 350px;
+        padding: 15px;
+    }
+    
+    .canvas-container {
+        min-height: calc(100vh - 100px);
+    }
+    
+    button {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+    
+    .preset-btn {
+        padding: 10px 8px;
+        font-size: 11px;
+    }
+
     .event-stats {
         margin-top: 10px;
         padding: 8px;
@@ -699,7 +844,8 @@ button.active {
     }
 }
 
-@media (min-width: 768px) {
+/* ★ デスクトップ・大画面用の最適化 */
+@media (min-width: 1024px) {
     .header {
         flex-shrink: 0;
     }
@@ -727,6 +873,9 @@ button.active {
         border-top: none;
         border-left: 1px solid rgba(255, 255, 255, 0.1);
         box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
+        position: relative;
+        transform: none;
+        opacity: 1;
     }
 
     .main-controls {
@@ -752,14 +901,78 @@ button.active {
         gap: 12px;
         margin-bottom: 12px;
     }
-}
-
-@media (min-width: 1200px) {
-    .controls {
-        width: 450px;
+    
+    /* デスクトップではトグルボタンを非表示 */
+    .controls-toggle {
+        display: none !important;
+    }
+    
+    /* デスクトップでは情報パネルを元の位置に */
+    .info {
+        top: 60px;
+        left: 15px;
+        right: auto;
+        font-size: 12px;
+        padding: 12px 15px;
+        max-width: none;
+    }
+    
+    .fps-display {
+        top: 15px;
+        left: 15px;
+        right: auto;
+        font-size: 14px;
+        padding: 8px 12px;
+        min-width: 70px;
     }
 }
 
+/* ★ 大型デスクトップ画面用 */
+@media (min-width: 1200px) {
+    .controls {
+        width: 450px;
+        padding: 25px;
+    }
+    
+    .main-controls {
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    
+    .control-section {
+        margin-bottom: 20px;
+    }
+    
+    button {
+        padding: 16px 18px;
+        font-size: 15px;
+    }
+    
+    .slider-row {
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+}
+
+/* ★ 超大型画面用 */
+@media (min-width: 1600px) {
+    .controls {
+        width: 500px;
+    }
+    
+    .info {
+        font-size: 13px;
+        padding: 15px 18px;
+    }
+    
+    .fps-display {
+        font-size: 15px;
+        padding: 10px 15px;
+        min-width: 80px;
+    }
+}
+
+/* ★ ランドスケープモード・低い画面用 */
 @media (max-height: 600px) {
     .help-popup {
         max-height: 90vh;
@@ -789,8 +1002,34 @@ button.active {
         margin-right: 8px;
         min-width: 18px;
     }
+    
+    /* ランドスケープ時のコントロール調整 */
+    @media (max-width: 767px) {
+        .controls {
+            padding: 60px 15px 15px 15px;
+        }
+        
+        .controls-toggle {
+            width: 40px;
+            height: 40px;
+            font-size: 16px;
+        }
+        
+        .info {
+            font-size: 10px;
+            padding: 5px 8px;
+            max-width: 100px;
+        }
+        
+        .fps-display {
+            font-size: 10px;
+            padding: 4px 6px;
+            min-width: 45px;
+        }
+    }
 }
 
+/* ★ 非常に低い画面用 */
 @media (max-height: 450px) {
     .help-popup {
         max-height: 95vh;
@@ -815,5 +1054,45 @@ button.active {
     .help-item {
         padding: 3px 6px;
         margin-bottom: 2px;
+    }
+    
+    /* 極小画面時のヘッダー縮小 */
+    .header {
+        padding: 5px 10px;
+    }
+    
+    .header h1 {
+        font-size: 16px;
+        margin-bottom: 4px;
+    }
+    
+    .header .subtitle {
+        font-size: 10px;
+    }
+}
+
+/* ★ パフォーマンス最適化用のアニメーション制御 */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    button::before {
+        display: none;
+    }
+    
+    .glow {
+        animation: none;
+        box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+    }
+}
+
+/* ★ バッテリー節約モード検知 */
+@media (prefers-color-scheme: dark) {
+    /* ダークモード時の最適化（既にダークテーマだが、さらに暗く） */
+    body {
+        background: linear-gradient(135deg, #050510 0%, #0a0a1a 50%, #1a0a2a 100%);
     }
 }

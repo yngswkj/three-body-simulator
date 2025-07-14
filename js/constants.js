@@ -24,11 +24,23 @@ export const PERFORMANCE_CONFIG = {
     TARGET_FPS: 55,
     CRITICAL_FPS: 50,
     EMERGENCY_FPS: 45,
-    INITIALIZATION_PERIOD: 5000,
+    INITIALIZATION_PERIOD: 3000, // 3秒に短縮
     MIN_HISTORY_LENGTH: 3,
-    MEMORY_LIMIT_MB: 150,
-    MAX_PARTICLES: 500,
-    OPTIMIZATION_LEVELS: [500, 300, 200, 100, 50] // パーティクル制限
+    MEMORY_LIMIT_MB: 100, // モバイル用にメモリ制限を厳格に
+    MAX_PARTICLES: 300, // モバイル用にパーティクル数削減
+    OPTIMIZATION_LEVELS: [300, 200, 120, 80, 40], // パーティクル制限を調整
+    MOBILE_OPTIMIZATION: {
+        MAX_PARTICLES: 150,
+        TRAIL_LIMIT: 15,
+        UPDATE_INTERVAL: 2,
+        GRAVITY_FIELD_SKIP: 2
+    },
+    DESKTOP_OPTIMIZATION: {
+        MAX_PARTICLES: 500,
+        TRAIL_LIMIT: 30,
+        UPDATE_INTERVAL: 1,
+        GRAVITY_FIELD_SKIP: 1
+    }
 };
 
 // ★ 描画設定
