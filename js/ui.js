@@ -222,8 +222,8 @@ export function getEventPos(e, canvas) {
  * マウス移動時の処理
  */
 export function handleMouseMove(e, canvas, bodies, gravity, drawBackground, findBodyAt, isRunning) {
-    // ★ 修正：ドラッグ中は常に移動処理を実行
-    if (uiState.isDragging) {
+    // ★ 修正：ドラッグ中は常に移動処理を実行（射出モードでない場合のみ）
+    if (uiState.isDragging && !uiState.isLaunching) {
         handleMove(e, canvas, drawBackground, bodies, isRunning);
         return;
     }
@@ -299,9 +299,9 @@ export function showError(message) {
 }
 
 /**
- * タッチ/マウス開始処理
+ * タッチ/マウス開始処理（射出システム対応）
  */
-export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay, drawBackground, isRunning, showError, Body) {
+export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay, drawBackground, isRunning, showError, Body, bodyLauncher = null) {
     try {
         e.preventDefault();
 
@@ -312,20 +312,39 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
         const selectedBody = findBodyAt(x, y, bodies);
 
         if (selectedBody) {
-            // ★ 修正：実行中でもドラッグ開始を許可
-            console.log(`天体ドラッグ開始: ${selectedBody.getTypeNameJapanese()} (質量: ${selectedBody.mass.toFixed(1)})`);
+            // ★ 新機能：停止中は射出モード、実行中は従来のドラッグモード
+            if (!isRunning && bodyLauncher) {
+                // 停止中：射出システムを使用
+                const launchStarted = bodyLauncher.startLaunch(x, y, selectedBody);
+                console.log(`🎯 射出モード開始: ${selectedBody.getTypeNameJapanese()} (質量: ${selectedBody.mass.toFixed(1)})`);
+                
+                // uiStateも更新
+                uiState.selectedBody = selectedBody;
+                uiState.isLaunching = launchStarted;
+                uiState.isDragging = false;
+                
+                return {
+                    selectedBody: selectedBody,
+                    isLaunching: launchStarted,
+                    isDragging: false,
+                    mode: 'launch'
+                };
+            } else {
+                // 実行中：従来のドラッグモード
+                console.log(`🖱️ ドラッグモード開始: ${selectedBody.getTypeNameJapanese()} (質量: ${selectedBody.mass.toFixed(1)})`);
+                selectedBody.isDragging = true;
 
-            // ★ 追加：ドラッグ中は天体の更新を一時停止するフラグを設定
-            selectedBody.isDragging = true;
-
-            return {
-                selectedBody: selectedBody,
-                isDragging: true,
-                dragOffset: {
-                    x: x - selectedBody.x,
-                    y: y - selectedBody.y
-                }
-            };
+                return {
+                    selectedBody: selectedBody,
+                    isDragging: true,
+                    isLaunching: false,
+                    mode: 'drag',
+                    dragOffset: {
+                        x: x - selectedBody.x,
+                        y: y - selectedBody.y
+                    }
+                };
+            }
         } else {
             // ★ 修正：実行中でも天体作成を許可、パーティクルシステムを取得
             try {
@@ -373,14 +392,12 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
 }
 
 /**
- * マウス移動処理（ドラッグ）
+ * マウス移動処理（ドラッグ・射出対応）
  */
-export function handleMove(event, canvas, drawBackground, bodies, isRunning) {
+export function handleMove(event, canvas, drawBackground, bodies, isRunning, bodyLauncher = null) {
     event.preventDefault();
 
-    // ★ 修正：ドラッグ中は常に処理を実行（isRunning状態に関係なく）
-    if (!uiState.isDragging || !uiState.selectedBody) return;
-
+    // 座標の取得
     const rect = canvas.getBoundingClientRect();
     let clientX, clientY;
 
@@ -394,6 +411,16 @@ export function handleMove(event, canvas, drawBackground, bodies, isRunning) {
 
     const x = clientX - rect.left;
     const y = clientY - rect.top;
+
+    // ★ 新機能：射出モードとドラッグモードの分岐
+    if (bodyLauncher && bodyLauncher.isLaunching) {
+        // 射出モード：射出システムで処理
+        bodyLauncher.updateDrag(x, y);
+        return; // 描画は射出システム側で管理
+    }
+
+    // 従来のドラッグモード
+    if (!uiState.isDragging || !uiState.selectedBody) return;
 
     // ドラッグオフセットを適用
     uiState.selectedBody.x = x - uiState.dragOffset.x;
@@ -412,14 +439,35 @@ export function handleMove(event, canvas, drawBackground, bodies, isRunning) {
 }
 
 /**
- * マウス/タッチ終了処理
+ * マウス/タッチ終了処理（射出システム対応）
  */
-export function handleEnd(event, canvas, drawBackground, bodies, isRunning) {
+export function handleEnd(event, canvas, drawBackground, bodies, isRunning, bodyLauncher = null) {
     event.preventDefault();
 
-    // ★ 修正：ドラッグ終了時に速度をリセット（実行中でも）
-    if (uiState.isDragging && uiState.selectedBody) {
-        // ドラッグ終了時は速度をゼロにする
+    // ★ 新機能：射出モードの処理
+    if (bodyLauncher && bodyLauncher.isLaunching) {
+        const executed = bodyLauncher.executeLaunch();
+        console.log(`🚀 射出${executed ? '実行' : 'キャンセル'}`);
+        
+        // 射出が実行された場合、uiState もクリア
+        if (executed) {
+            uiState.isDragging = false;
+            uiState.isLaunching = false;
+            uiState.selectedBody = null;
+        }
+        
+        return {
+            isDragging: false,
+            isLaunching: false,
+            selectedBody: null,
+            mode: 'none',
+            launched: executed
+        };
+    }
+
+    // ★ 従来のドラッグ終了処理（射出モードでない場合のみ）
+    if (uiState.isDragging && uiState.selectedBody && !bodyLauncher?.isLaunching) {
+        // ドラッグ終了時は速度をゼロにする（射出モードでは実行しない）
         uiState.selectedBody.vx = 0;
         uiState.selectedBody.vy = 0;
 
@@ -617,16 +665,21 @@ function updateEventDisplay(eventStats) {
     }
 }
 
+// ★ 射出状態変数の追加
+let isLaunching = false;
+
 // UI状態をエクスポート
 export const uiState = {
     get hoveredBody() { return hoveredBody; },
     get selectedBody() { return selectedBody; },
     get isDragging() { return isDragging; },
+    get isLaunching() { return isLaunching; },
     get dragOffset() { return dragOffset; },
     get mousePos() { return mousePos; },
     set hoveredBody(value) { hoveredBody = value; },
     set selectedBody(value) { selectedBody = value; },
     set isDragging(value) { isDragging = value; },
+    set isLaunching(value) { isLaunching = value; },
     set dragOffset(value) { dragOffset = value; },
     set mousePos(value) { mousePos = value; }
 };

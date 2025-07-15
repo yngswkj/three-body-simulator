@@ -122,4 +122,11 @@ export class ParticleSystem {
     clear() {
         this.particles = [];
     }
+    
+    /**
+     * 全パーティクルクリア（別名メソッド）
+     */
+    clearAll() {
+        this.clear();
+    }
 }

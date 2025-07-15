@@ -29,6 +29,7 @@ import { ParticleSystem } from './js/particles.js';
 import { Body } from './js/body.js';
 import { SpecialEventsManager } from './js/specialEvents.js';
 import { mobileOptimization } from './js/mobile-optimization.js';
+import { BodyLauncher } from './js/body-launcher.js';
 
 // グローバル変数
 const canvas = document.getElementById('canvas');
@@ -66,6 +67,9 @@ const particleSystem = new ParticleSystem();
 
 // ★ 追加：特殊イベントマネージャー
 const specialEvents = new SpecialEventsManager();
+
+// ★ 追加：天体射出システム
+const bodyLauncher = new BodyLauncher(canvas, ctx);
 
 // 現在のプリセットを記憶
 let currentPresetType = null;
@@ -186,6 +190,11 @@ function animate() {
 
         // ★ 追加：特殊イベントの更新と描画（シミュレーション時間を渡す）
         specialEvents.update(bodies, time, ctx, canvas);
+
+        // ★ 追加：射出システムの描画（停止中のみ）
+        if (!isRunning) {
+            bodyLauncher.render(bodies);
+        }
 
         // パーティクル管理
         particleSystem.update(ctx);
@@ -344,6 +353,9 @@ document.getElementById('reset')?.addEventListener('click', () => {
 
         // ★ 追加：特殊イベント統計もリセット
         specialEvents.resetStats();
+        
+        // ★ 追加：射出システムもリセット
+        bodyLauncher.resetAllLaunches();
 
         updateDisplay();
 
@@ -354,6 +366,7 @@ document.getElementById('reset')?.addEventListener('click', () => {
                     body.draw(ctx, showTrails);
                 }
             });
+            bodyLauncher.render(bodies);
         }
     }
 
@@ -378,9 +391,20 @@ document.getElementById('clear')?.addEventListener('click', () => {
 
     // ★ 追加：特殊イベント統計もリセット
     specialEvents.resetStats();
+    
+    // ★ 追加：射出システムもリセット
+    bodyLauncher.resetAllLaunches();
 
     updateDisplay();
     drawBackground(ctx, canvas);
+    
+    // ★ 追加：停止状態での矢印エフェクト表示
+    bodies.forEach(body => {
+        if (body.isValid) {
+            body.draw(ctx, showTrails);
+        }
+    });
+    bodyLauncher.render(bodies);
 
     console.log('天体をクリアしました（最適化レベル・イベント統計も初期化）');
 });
@@ -523,6 +547,14 @@ function setPreset(type) {
         updateDisplay();
         drawBackground(ctx, canvas);
 
+        // ★ 追加：停止状態での天体描画と射出システム描画
+        bodies.forEach(body => {
+            if (body.isValid) {
+                body.draw(ctx, showTrails);
+            }
+        });
+        bodyLauncher.render(bodies);
+
         if (!isRunning) {
             isRunning = true;
             const btn = document.getElementById('playPause');
@@ -544,13 +576,14 @@ function setPreset(type) {
 // マウス/タッチイベントの処理
 canvas.addEventListener('touchstart', (e) => {
     const result = handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
-        () => drawBackground(ctx, canvas), isRunning, showError, Body);
+        () => drawBackground(ctx, canvas), isRunning, showError, Body, bodyLauncher);
     if (result.currentPresetType !== undefined) {
         currentPresetType = result.currentPresetType;
     }
     if (result.selectedBody !== undefined) {
         uiState.selectedBody = result.selectedBody;
         uiState.isDragging = result.isDragging;
+        uiState.isLaunching = result.isLaunching;
         uiState.dragOffset = result.dragOffset;
     }
     // ★ 追加：新しく作成された天体にパーティクルシステムを設定
@@ -562,18 +595,19 @@ canvas.addEventListener('touchstart', (e) => {
 
 canvas.addEventListener('touchmove', (e) => {
     // ★ 修正：実際のisRunning状態を渡す
-    handleMove(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning);
+    handleMove(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
 }, { passive: false });
 
 canvas.addEventListener('mousedown', (e) => {
     const result = handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
-        () => drawBackground(ctx, canvas), isRunning, showError, Body);
+        () => drawBackground(ctx, canvas), isRunning, showError, Body, bodyLauncher);
     if (result.currentPresetType !== undefined) {
         currentPresetType = result.currentPresetType;
     }
     if (result.selectedBody !== undefined) {
         uiState.selectedBody = result.selectedBody;
         uiState.isDragging = result.isDragging;
+        uiState.isLaunching = result.isLaunching;
         uiState.dragOffset = result.dragOffset;
     }
     // ★ 追加：新しく作成された天体にパーティクルシステムを設定
@@ -584,21 +618,41 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mousemove', (e) => {
-    // ★ 修正：実際のisRunning状態を渡す
-    handleMouseMove(e, canvas, bodies, gravity, () => drawBackground(ctx, canvas), findBodyAt, isRunning);
+    // ★ 修正：射出システム対応のマウスムーブ処理
+    if (bodyLauncher.isLaunching) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        bodyLauncher.updateDrag(x, y);
+        
+        // 停止状態での即座描画更新
+        if (!isRunning) {
+            drawBackground(ctx, canvas);
+            bodies.forEach(body => {
+                if (body.isValid) {
+                    body.draw(ctx, showTrails);
+                }
+            });
+            bodyLauncher.render(bodies);
+        }
+    } else {
+        handleMouseMove(e, canvas, bodies, gravity, () => drawBackground(ctx, canvas), findBodyAt, isRunning);
+    }
 });
 
 canvas.addEventListener('touchend', (e) => {
     // ★ 修正：実際のisRunning状態を渡す
-    const result = handleEnd(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning);
+    const result = handleEnd(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
     uiState.isDragging = result.isDragging;
+    uiState.isLaunching = result.isLaunching;
     uiState.selectedBody = result.selectedBody;
 });
 
 canvas.addEventListener('mouseup', (e) => {
     // ★ 修正：実際のisRunning状態を渡す
-    const result = handleEnd(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning);
+    const result = handleEnd(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
     uiState.isDragging = result.isDragging;
+    uiState.isLaunching = result.isLaunching;
     uiState.selectedBody = result.selectedBody;
 });
 
@@ -688,16 +742,34 @@ try {
             }
             
             // 特殊イベントをリセット
-            specialEventsManager.resetStats();
+            specialEvents.resetStats();
             
             console.log('💾 メモリ最適化を実行しました');
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && helpPopup.style.display === 'block') {
-                helpOverlay.style.display = 'none';
-                helpPopup.style.display = 'none';
-                console.log('ESCキーでヘルプを閉じました');
+            if (e.key === 'Escape') {
+                if (helpPopup.style.display === 'block') {
+                    helpOverlay.style.display = 'none';
+                    helpPopup.style.display = 'none';
+                    console.log('ESCキーでヘルプを閉じました');
+                } else if (bodyLauncher.isLaunching || bodyLauncher.queuedLaunches.size > 0) {
+                    // ★ 追加：ESCキーで射出キャンセル（すべて）
+                    bodyLauncher.cancelAllLaunches();
+                    uiState.isLaunching = false;
+                    uiState.selectedBody = null;
+                    console.log('🎯 ESCキーですべての射出をキャンセルしました');
+                    
+                    // 画面を再描画
+                    if (!isRunning) {
+                        drawBackground(ctx, canvas);
+                        bodies.forEach(body => {
+                            if (body.isValid) {
+                                body.draw(ctx, showTrails);
+                            }
+                        });
+                    }
+                }
             }
         });
 
