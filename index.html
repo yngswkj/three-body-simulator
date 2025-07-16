@@ -54,9 +54,15 @@
 
             <!-- ★ 追加：モバイル用の常時表示ボタン -->
             <div class="mobile-fixed-controls" id="mobileFixedControls">
-                <button id="playPauseMobile">開始</button>
-                <button id="resetMobile">リセット</button>
-                <button id="clearMobile">クリア</button>
+                <div class="mobile-controls-row">
+                    <button id="playPauseMobile">開始</button>
+                    <button id="resetMobile">リセット</button>
+                    <button id="clearMobile">クリア</button>
+                </div>
+                <div class="mobile-controls-row">
+                    <button class="trail-toggle active" id="collisionToggleMobile">衝突有効</button>
+                    <button class="trail-toggle" id="gravityFieldToggleMobile">重力場非表示</button>
+                </div>
             </div>
             
             <div class="controls">

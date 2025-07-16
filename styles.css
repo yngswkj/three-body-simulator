@@ -702,10 +702,20 @@ button.active {
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
     z-index: 1002;
     display: none;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    flex-direction: column;
+    gap: 8px;
     safe-area-inset-bottom: constant(safe-area-inset-bottom);
     safe-area-inset-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-controls-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.mobile-controls-row:last-child {
+    grid-template-columns: repeat(2, 1fr);
 }
 
 .mobile-fixed-controls button {
@@ -764,7 +774,7 @@ button.active {
     }
     
     .mobile-fixed-controls {
-        display: grid;
+        display: flex;
         padding-right: 80px;
     }
     

@@ -480,23 +480,52 @@ document.getElementById('trailToggle')?.addEventListener('click', () => {
     }
 });
 
-document.getElementById('collisionToggle')?.addEventListener('click', () => {
+// ★ 統一された衝突判定切り替え関数
+function toggleCollision() {
     enableCollisions = !enableCollisions;
     const btn = document.getElementById('collisionToggle');
+    const mobileBtn = document.getElementById('collisionToggleMobile');
+    
+    const buttonText = enableCollisions ? '衝突有効' : '衝突無効';
+    
     if (btn) {
         btn.classList.toggle('active', enableCollisions);
-        btn.textContent = enableCollisions ? '衝突有効' : '衝突無効';
+        btn.textContent = buttonText;
     }
-});
+    if (mobileBtn) {
+        mobileBtn.classList.toggle('active', enableCollisions);
+        mobileBtn.textContent = buttonText;
+    }
+    
+    console.log(`衝突判定: ${enableCollisions ? '有効' : '無効'}`);
+}
 
-document.getElementById('gravityFieldToggle')?.addEventListener('click', () => {
+// ★ 統一された重力場表示切り替え関数
+function toggleGravityField() {
     showGravityField = !showGravityField;
     const btn = document.getElementById('gravityFieldToggle');
+    const mobileBtn = document.getElementById('gravityFieldToggleMobile');
+    
+    const buttonText = showGravityField ? '重力場表示' : '重力場非表示';
+    
     if (btn) {
         btn.classList.toggle('active', showGravityField);
-        btn.textContent = showGravityField ? '重力場表示' : '重力場非表示';
+        btn.textContent = buttonText;
     }
-});
+    if (mobileBtn) {
+        mobileBtn.classList.toggle('active', showGravityField);
+        mobileBtn.textContent = buttonText;
+    }
+    
+    console.log(`重力場表示: ${showGravityField ? '有効' : '無効'}`);
+}
+
+// イベントリスナーの設定
+document.getElementById('collisionToggle')?.addEventListener('click', toggleCollision);
+document.getElementById('collisionToggleMobile')?.addEventListener('click', toggleCollision);
+
+document.getElementById('gravityFieldToggle')?.addEventListener('click', toggleGravityField);
+document.getElementById('gravityFieldToggleMobile')?.addEventListener('click', toggleGravityField);
 
 document.getElementById('collisionSensitivitySlider')?.addEventListener('input', (e) => {
     collisionSensitivity = parseFloat(e.target.value);
