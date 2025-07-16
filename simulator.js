@@ -318,17 +318,35 @@ function stopSimulation() {
 }
 
 // コントロール
-document.getElementById('playPause')?.addEventListener('click', () => {
+function toggleSimulation() {
     isRunning = !isRunning;
     const btn = document.getElementById('playPause');
-    btn.textContent = isRunning ? '停止' : '開始';
-    btn.classList.toggle('active', isRunning);
+    const mobileBtn = document.getElementById('playPauseMobile');
+    
+    const buttonText = isRunning ? '停止' : '開始';
+    if (btn) {
+        btn.textContent = buttonText;
+        btn.classList.toggle('active', isRunning);
+    }
+    if (mobileBtn) {
+        mobileBtn.textContent = buttonText;
+        mobileBtn.classList.toggle('active', isRunning);
+    }
+    
     if (isRunning) {
+        // ★ 追加：シミュレーション開始時にドラッグ履歴をクリア
+        bodies.forEach(body => {
+            body.wasDragged = false;
+            body.dragArrow = null; // ★ 追加：矢印エフェクト情報をクリア
+        });
         animate();
     }
-});
+}
 
-document.getElementById('reset')?.addEventListener('click', () => {
+document.getElementById('playPause')?.addEventListener('click', toggleSimulation);
+document.getElementById('playPauseMobile')?.addEventListener('click', toggleSimulation);
+
+function resetSimulation() {
     if (currentPresetType) {
         setPreset(currentPresetType);
     } else {
@@ -337,6 +355,8 @@ document.getElementById('reset')?.addEventListener('click', () => {
             body.vy = 0;
             body.trail = [];
             body.isValid = true;
+            body.wasDragged = false; // ★ 追加：ドラッグ履歴をクリア
+            body.dragArrow = null; // ★ 追加：矢印エフェクト情報をクリア
         });
         particleSystem.clear();
         time = 0;
@@ -371,9 +391,12 @@ document.getElementById('reset')?.addEventListener('click', () => {
     }
 
     console.log('シミュレーションをリセットしました（最適化レベル・イベント統計も初期化）');
-});
+}
 
-document.getElementById('clear')?.addEventListener('click', () => {
+document.getElementById('reset')?.addEventListener('click', resetSimulation);
+document.getElementById('resetMobile')?.addEventListener('click', resetSimulation);
+
+function clearSimulation() {
     currentPresetType = null;
     bodies = [];
     particleSystem.clear();
@@ -407,7 +430,10 @@ document.getElementById('clear')?.addEventListener('click', () => {
     bodyLauncher.render(bodies);
 
     console.log('天体をクリアしました（最適化レベル・イベント統計も初期化）');
-});
+}
+
+document.getElementById('clear')?.addEventListener('click', clearSimulation);
+document.getElementById('clearMobile')?.addEventListener('click', clearSimulation);
 
 // スライダー
 document.getElementById('speedSlider')?.addEventListener('input', (e) => {
@@ -594,8 +620,38 @@ canvas.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
-    // ★ 修正：実際のisRunning状態を渡す
-    handleMove(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
+    // ★ 修正：タッチムーブ時の射出システム処理を優先
+    if (bodyLauncher.isLaunching) {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        
+        let clientX, clientY;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        
+        bodyLauncher.updateDrag(x, y);
+        
+        // 停止状態での即座描画更新
+        if (!isRunning) {
+            drawBackground(ctx, canvas);
+            bodies.forEach(body => {
+                if (body.isValid) {
+                    body.draw(ctx, showTrails);
+                }
+            });
+            bodyLauncher.render(bodies);
+        }
+    } else {
+        handleMove(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
+    }
 }, { passive: false });
 
 canvas.addEventListener('mousedown', (e) => {

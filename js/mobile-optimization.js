@@ -144,14 +144,8 @@ export class MobileOptimization {
     }
     
     optimizeTouchEvents() {
-        // passive リスナーでスクロール性能向上
-        const passiveEvents = ['touchstart', 'touchmove', 'touchend'];
-        
-        passiveEvents.forEach(eventType => {
-            document.addEventListener(eventType, (e) => {
-                // 必要に応じてタッチイベントの処理を最適化
-            }, { passive: true });
-        });
+        // ★ 修正：passiveイベントリスナーを削除（キャンバス固有のタッチイベントと競合するため）
+        // キャンバス以外の要素でのスクロール性能向上は、キャンバス固有のイベントで対応
         
         // タッチ遅延の削除
         if ('touchstart' in window) {
@@ -161,7 +155,7 @@ export class MobileOptimization {
             document.head.appendChild(metaTag);
         }
         
-        console.log('👆 タッチイベント最適化完了');
+        console.log('👆 タッチイベント最適化完了（passiveイベント競合を解決）');
     }
     
     optimizeRendering() {

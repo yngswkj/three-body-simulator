@@ -48,6 +48,13 @@ export class Body {
 
         // ★ 追加：太陽黒点管理用プロパティ
         this.sunspots = [];
+        
+        // ★ 追加：ドラッグ履歴とUI状態
+        this.wasDragged = false;
+        this.isDragging = false;
+        
+        // ★ 追加：矢印エフェクト情報
+        this.dragArrow = null; // {startX, startY, endX, endY, power}
         this.lastSunspotUpdate = 0;
         this.sunspotUpdateInterval = 3000 + Math.random() * 6000; // 5-15秒間隔
         this.maxSunspots = 2 + Math.floor(Math.random() * 3); // 2-4個
