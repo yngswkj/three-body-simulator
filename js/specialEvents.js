@@ -193,13 +193,16 @@ class SpecialEventsManager {
         this.lastEventTime = this.internalTime; // ★ 修正：内部時計を使用
 
         // 統計更新
-        this.updateEventStats(event);
+        this.updateEventStats(event.name);
         this.addToHistory(event);
 
         // イベント開始効果
         this.startEventEffect(event, bodies, ctx, canvas);
 
-        console.log(`🌟 特殊イベント発生: ${this.getEventDisplayName(event.name)} (${event.rarity}) - 継続時間: ${eventData.duration}秒 - 内部時計: ${this.internalTime.toFixed(1)}秒`);
+        // 頻度を制限したログ出力
+        if (event.rarity === 'legendary' || Math.random() < 0.3) {
+            console.log(`🌟 特殊イベント発生: ${this.getEventDisplayName(event.name)} (${event.rarity}) - 継続時間: ${eventData.duration}秒`);
+        }
     }
 
     /**
@@ -216,12 +219,92 @@ class SpecialEventsManager {
 
             // ★ 修正：イベント終了チェックも内部時計ベース
             if (this.internalTime >= event.endTime) {
-                const totalDuration = this.internalTime - event.startTime;
-                const realDuration = (Date.now() * 0.001) - event.realStartTime;
-                console.log(`🌙 ${this.getEventDisplayName(event.name)} 終了 - 経過時間: ${totalDuration.toFixed(1)}秒 (リアル: ${realDuration.toFixed(1)}秒)`);
+                // 終了ログを制限（伝説級イベントまたは確率で出力）
+                if (event.rarity === 'legendary' || Math.random() < 0.2) {
+                    const totalDuration = this.internalTime - event.startTime;
+                    console.log(`🌙 ${this.getEventDisplayName(event.name)} 終了 - 経過時間: ${totalDuration.toFixed(1)}秒`);
+                }
                 this.endEvent(event, bodies);
                 this.activeEvents.delete(id);
             }
+        }
+    }
+
+    /**
+     * イベント開始時の効果
+     */
+    startEventEffect(event, bodies, ctx, canvas) {
+        const { name } = event;
+        
+        switch (name) {
+            case 'cosmicStorm':
+                // 全天体に軽微な擾乱を与える
+                bodies.forEach(body => {
+                    if (body.isValid) {
+                        body.vx += (Math.random() - 0.5) * 0.5;
+                        body.vy += (Math.random() - 0.5) * 0.5;
+                    }
+                });
+                break;
+                
+            case 'perfectAlignment':
+                // 天体を一直線に整列
+                const validBodies = bodies.filter(body => body.isValid);
+                if (validBodies.length >= 3) {
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    const spacing = 150;
+                    
+                    validBodies.forEach((body, index) => {
+                        const targetX = centerX + (index - (validBodies.length - 1) / 2) * spacing;
+                        const targetY = centerY;
+                        
+                        // 滑らかに移動するための速度調整
+                        body.vx += (targetX - body.x) * 0.001;
+                        body.vy += (targetY - body.y) * 0.001;
+                    });
+                }
+                break;
+                
+            case 'resonanceHarmony':
+                // 軌道の安定化
+                bodies.forEach(body => {
+                    if (body.isValid) {
+                        body.vx *= 0.95;
+                        body.vy *= 0.95;
+                    }
+                });
+                break;
+                
+            case 'quantumFluctuation':
+                // 微細な位置揺らぎ
+                bodies.forEach(body => {
+                    if (body.isValid) {
+                        body.x += (Math.random() - 0.5) * 0.1;
+                        body.y += (Math.random() - 0.5) * 0.1;
+                    }
+                });
+                break;
+        }
+    }
+
+    /**
+     * イベント終了時の処理
+     */
+    endEvent(event, bodies) {
+        // 必要に応じて終了時の処理を追加
+        switch (event.name) {
+            case 'cosmicStorm':
+                // 特に何もしない
+                break;
+            case 'perfectAlignment':
+                // 整列状態を少し崩す
+                const validBodies = bodies.filter(body => body.isValid);
+                validBodies.forEach(body => {
+                    body.vx += (Math.random() - 0.5) * 0.1;
+                    body.vy += (Math.random() - 0.5) * 0.1;
+                });
+                break;
         }
     }
 
@@ -352,7 +435,7 @@ class SpecialEventsManager {
         const pulseIntensity = 0.5 + 0.5 * Math.sin(time * 4);
 
         stars.forEach(star => {
-            const flareRadius = Math.sqrt(star.mass) * 3 * (1 + progress * 2) * pulseIntensity;
+            const flareRadius = Math.sqrt(Math.abs(star.mass || 30)) * 3 * (1 + progress * 2) * pulseIntensity;
 
             // フレア本体
             const flareGradient = ctx.createRadialGradient(
@@ -382,7 +465,7 @@ class SpecialEventsManager {
 
         blackHoles.forEach(bh => {
             const time = Date.now() * 0.001;
-            const radiationRadius = Math.sqrt(bh.mass) * 4 * (1 + progress);
+            const radiationRadius = Math.sqrt(Math.abs(bh.mass || 30)) * 4 * (1 + progress);
 
             // 量子泡効果
             for (let i = 0; i < 30; i++) {
@@ -391,7 +474,7 @@ class SpecialEventsManager {
                 const x = bh.x + r * Math.cos(angle);
                 const y = bh.y + r * Math.sin(angle);
 
-                const particleSize = 2 + Math.sin(time * 5 + i) * 1;
+                const particleSize = Math.max(1, 2 + Math.sin(time * 5 + i) * 1);
                 const alpha = intensity * 0.6 * (0.5 + 0.5 * Math.sin(time * 4 + i));
 
                 ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
@@ -491,7 +574,7 @@ class SpecialEventsManager {
 
         // 時空歪み効果
         blackHoles.forEach(bh => {
-            const distortionRadius = Math.sqrt(bh.mass) * 6 * intensity;
+            const distortionRadius = Math.sqrt(Math.abs(bh.mass || 30)) * 6 * intensity;
 
             for (let i = 0; i < 8; i++) {
                 const angle = (i / 8) * Math.PI * 2 + time * 0.5;
@@ -529,7 +612,7 @@ class SpecialEventsManager {
         this.internalTime = 0;
         this.lastUpdateTime = Date.now() * 0.001;
 
-        console.log('🔄 特殊イベント統計をリセットしました（内部時計もリセット）');
+        // 特殊イベント統計をリセットしました（内部時計もリセット）
     }
 
     // ヘルパーメソッド
@@ -612,6 +695,23 @@ class SpecialEventsManager {
         return variance < avgDistance * 0.1; // 分散が平均距離の10%未満なら安定
     }
 
+    /**
+     * イベント名の表示用変換
+     */
+    getEventDisplayName(eventName) {
+        const displayNames = {
+            'cosmicStorm': '宇宙嵐',
+            'solarFlare': '太陽フレア',
+            'hawkingRadiation': 'ホーキング輻射',
+            'gravitationalLensing': '重力レンズ',
+            'perfectAlignment': '完璧な整列',
+            'blackHoleMerger': 'ブラックホール合体',
+            'resonanceHarmony': '共鳴ハーモニー',
+            'quantumFluctuation': '量子ゆらぎ'
+        };
+        return displayNames[eventName] || eventName;
+    }
+
     // その他のヘルパーメソッド
     renderLightning(ctx, alpha) {
         const points = [];
@@ -653,7 +753,7 @@ class SpecialEventsManager {
 
     renderProminences(ctx, star, progress, intensity) {
         const time = Date.now() * 0.001;
-        const baseRadius = Math.sqrt(star.mass) * 1.2;
+        const baseRadius = Math.sqrt(Math.abs(star.mass || 30)) * 1.2;
 
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2 + time * 0.5;
@@ -683,7 +783,7 @@ class SpecialEventsManager {
         // 既存のアインシュタインリング効果を強化
         const blackHoles = bodies.filter(b => b.type === 'blackHole' && b.isValid);
         blackHoles.forEach(bh => {
-            const enhancedRadius = Math.sqrt(bh.mass) * 6 * intensity;
+            const enhancedRadius = Math.sqrt(Math.abs(bh.mass || 30)) * 6 * intensity;
 
             ctx.strokeStyle = `rgba(255, 255, 255, ${intensity * 0.8})`;
             ctx.lineWidth = 3;
@@ -701,7 +801,8 @@ class SpecialEventsManager {
         validBodies.forEach((body, i) => {
             const frequency = 0.5 + i * 0.3;
             const amplitude = intensity * 20;
-            const waveRadius = Math.sqrt(body.mass) * 2 + amplitude * Math.sin(time * frequency);
+            const baseSqrt = Math.sqrt(Math.abs(body.mass || 30)); // 安全チェック
+            const waveRadius = Math.max(5, baseSqrt * 2 + amplitude * Math.sin(time * frequency));
 
             const hue = (i * 60 + time * 20) % 360;
             ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${intensity * 0.6})`;
@@ -714,11 +815,14 @@ class SpecialEventsManager {
 
     startEventEffect(event, bodies, ctx, canvas) {
         // イベント開始時の特殊効果
-        console.log(`✨ ${this.getEventDisplayName(event.name)} 開始!`);
+        // ログを制限（伝説級イベントのみ表示）
+        if (event.rarity === 'legendary') {
+            console.log(`✨ ${this.getEventDisplayName(event.name)} 開始!`);
+        }
     }
 
     endEvent(event, bodies) {
-        console.log(`🌙 ${this.getEventDisplayName(event.name)} 終了`);
+        // endEventメソッドの実装をメインのendEvent関数に移動済み
     }
 
     updateEventStats(event) {
@@ -767,6 +871,350 @@ class SpecialEventsManager {
      */
     getEventHistory() {
         return [...this.eventHistory];
+    }
+
+    /**
+     * ★ 開発者モード用：特殊イベントを強制発生
+     */
+    triggerEvent(eventType, bodies, particleSystem, ctx, canvas) {
+        console.log(`🎯 開発者モード: ${eventType} を強制発生`);
+        
+        // イベントタイプの正規化
+        const normalizedEventType = eventType.replace(/_/g, '').toLowerCase();
+        
+        try {
+            // イベントデータマップ
+            const eventDataMap = {
+                'cosmicstorm': {
+                    name: 'cosmicStorm',
+                    rarity: 'common',
+                    duration: 25,
+                    condition: () => true
+                },
+                'solarflare': {
+                    name: 'solarFlare',
+                    rarity: 'uncommon',
+                    duration: 12,
+                    condition: () => true
+                },
+                'hawkingradiation': {
+                    name: 'hawkingRadiation',
+                    rarity: 'rare',
+                    duration: 15,
+                    condition: () => true
+                },
+                'gravitylens': {
+                    name: 'gravitationalLensing',
+                    rarity: 'rare',
+                    duration: 20,
+                    condition: () => true
+                },
+                'perfectalignment': {
+                    name: 'perfectAlignment',
+                    rarity: 'legendary',
+                    duration: 30,
+                    condition: () => true
+                },
+                'blackholemerger': {
+                    name: 'blackHoleMerger',
+                    rarity: 'legendary',
+                    duration: 25,
+                    condition: () => true
+                },
+                'resonanceharmony': {
+                    name: 'resonanceHarmony',
+                    rarity: 'legendary',
+                    duration: 35,
+                    condition: () => true
+                },
+                'quantumfluctuation': {
+                    name: 'quantumFluctuation',
+                    rarity: 'ultra_rare',
+                    duration: 20,
+                    condition: () => true
+                }
+            };
+            
+            const eventData = eventDataMap[normalizedEventType];
+            if (!eventData) {
+                console.warn(`未知のイベントタイプ: ${eventType}`);
+                return false;
+            }
+            
+            // 統一されたイベントシステムを使用
+            this.executeEvent(eventData, bodies, this.internalTime, ctx, canvas);
+            
+            return true;
+        } catch (error) {
+            console.error(`イベント発生エラー (${eventType}):`, error);
+            return false;
+        }
+    }
+
+    /**
+     * 宇宙嵐の強制発生
+     */
+    triggerCosmicStorm(bodies, particleSystem, ctx, canvas) {
+        console.log('⚡ 宇宙嵐を発生させています...');
+        
+        // 全天体に軽微な擾乱を与える
+        bodies.forEach(body => {
+            if (body.isValid) {
+                body.vx += (Math.random() - 0.5) * 0.5;
+                body.vy += (Math.random() - 0.5) * 0.5;
+            }
+        });
+        
+        // パーティクルエフェクト
+        if (particleSystem) {
+            for (let i = 0; i < 50; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                particleSystem.createAdvancedEffect('energy_burst', x, y, 0.5);
+            }
+        }
+        
+        this.addEventToHistory('cosmic_storm', '宇宙嵐');
+    }
+
+    /**
+     * 太陽フレアの強制発生
+     */
+    triggerSolarFlare(bodies, particleSystem, ctx, canvas) {
+        console.log('☀️ 太陽フレアを発生させています...');
+        
+        // 最も質量の大きい天体から発生
+        const star = bodies.reduce((max, body) => 
+            body.isValid && body.mass > max.mass ? body : max, 
+            { mass: 0 }
+        );
+        
+        if (star.mass > 0) {
+            // 恒星風パーティクル
+            if (particleSystem) {
+                particleSystem.createAdvancedEffect('stellar_wind', star, 1.5);
+            }
+            
+            this.addEventToHistory('solar_flare', '太陽フレア');
+        }
+    }
+
+    /**
+     * ホーキング輻射の強制発生
+     */
+    triggerHawkingRadiation(bodies, particleSystem, ctx, canvas) {
+        console.log('🔬 ホーキング輻射を発生させています...');
+        
+        // ブラックホールを探す
+        const blackHole = bodies.find(body => body.isValid && body.type === 'blackHole');
+        
+        if (blackHole) {
+            // 微細なパーティクル放出
+            if (particleSystem) {
+                for (let i = 0; i < 20; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = blackHole.radius * (2 + Math.random());
+                    const x = blackHole.x + Math.cos(angle) * distance;
+                    const y = blackHole.y + Math.sin(angle) * distance;
+                    particleSystem.createAdvancedEffect('energy_burst', x, y, 0.3);
+                }
+            }
+            
+            this.addEventToHistory('hawking_radiation', 'ホーキング輻射');
+        }
+    }
+
+    /**
+     * 重力レンズの強制発生
+     */
+    triggerGravityLens(bodies, particleSystem, ctx, canvas) {
+        console.log('🔍 重力レンズ効果を発生させています...');
+        
+        // 視覚的な重力レンズ効果
+        if (particleSystem) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            for (let i = 0; i < 30; i++) {
+                const angle = (i / 30) * Math.PI * 2;
+                const radius = 100 + i * 5;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                particleSystem.createAdvancedEffect('gravitational_waves', { x: centerX, y: centerY }, { x, y }, 0.5);
+            }
+        }
+        
+        this.addEventToHistory('gravity_lens', '重力レンズ');
+    }
+
+    /**
+     * 完璧な整列の強制発生
+     */
+    triggerPerfectAlignment(bodies, particleSystem, ctx, canvas) {
+        console.log('🌈 完璧な整列を発生させています...');
+        
+        // 天体を一直線に整列
+        const validBodies = bodies.filter(body => body.isValid);
+        if (validBodies.length >= 3) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const spacing = 150;
+            
+            validBodies.forEach((body, index) => {
+                body.x = centerX + (index - (validBodies.length - 1) / 2) * spacing;
+                body.y = centerY;
+            });
+            
+            // 整列エフェクト
+            if (particleSystem) {
+                for (let i = 0; i < validBodies.length; i++) {
+                    const body = validBodies[i];
+                    particleSystem.createAdvancedEffect('energy_burst', body.x, body.y, 0.8);
+                }
+            }
+            
+            this.addEventToHistory('perfect_alignment', '完璧な整列');
+        }
+    }
+
+    /**
+     * ブラックホール合体の強制発生
+     */
+    triggerBlackHoleMerger(bodies, particleSystem, ctx, canvas) {
+        console.log('💫 ブラックホール合体を発生させています...');
+        
+        // 重力波エフェクト
+        if (particleSystem) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            particleSystem.createAdvancedEffect('gravitational_waves', 
+                { x: centerX - 50, y: centerY }, 
+                { x: centerX + 50, y: centerY }, 
+                1.0
+            );
+            
+            // 強力なエネルギー放出
+            for (let i = 0; i < 100; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 200;
+                const x = centerX + Math.cos(angle) * distance;
+                const y = centerY + Math.sin(angle) * distance;
+                particleSystem.createAdvancedEffect('energy_burst', x, y, 1.0);
+            }
+        }
+        
+        this.addEventToHistory('black_hole_merger', 'ブラックホール合体');
+    }
+
+    /**
+     * 共鳴ハーモニーの強制発生
+     */
+    triggerResonanceHarmony(bodies, particleSystem, ctx, canvas) {
+        console.log('🎵 共鳴ハーモニーを発生させています...');
+        
+        // 軌道の安定化
+        bodies.forEach(body => {
+            if (body.isValid) {
+                // 速度を軽微に調整して安定化
+                body.vx *= 0.95;
+                body.vy *= 0.95;
+            }
+        });
+        
+        // 美しい軌道エフェクト
+        if (particleSystem) {
+            bodies.forEach(body => {
+                if (body.isValid) {
+                    for (let i = 0; i < 10; i++) {
+                        const angle = (i / 10) * Math.PI * 2;
+                        const x = body.x + Math.cos(angle) * body.radius * 2;
+                        const y = body.y + Math.sin(angle) * body.radius * 2;
+                        particleSystem.createAdvancedEffect('energy_burst', x, y, 0.4);
+                    }
+                }
+            });
+        }
+        
+        this.addEventToHistory('resonance_harmony', '共鳴ハーモニー');
+    }
+
+    /**
+     * 量子ゆらぎの強制発生
+     */
+    triggerQuantumFluctuation(bodies, particleSystem, ctx, canvas) {
+        console.log('🌀 量子ゆらぎを発生させています...');
+        
+        // 微細な位置揺らぎ
+        bodies.forEach(body => {
+            if (body.isValid) {
+                body.x += (Math.random() - 0.5) * 0.1;
+                body.y += (Math.random() - 0.5) * 0.1;
+            }
+        });
+        
+        // 量子エフェクト
+        if (particleSystem) {
+            for (let i = 0; i < 30; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                particleSystem.createAdvancedEffect('wormhole', x, y, 0.3);
+            }
+        }
+        
+        this.addEventToHistory('quantum_fluctuation', '量子ゆらぎ');
+    }
+
+    /**
+     * イベント統計の更新
+     */
+    updateEventStats(eventType) {
+        this.eventStats.totalEvents++;
+        this.eventStats.eventTypes[eventType] = (this.eventStats.eventTypes[eventType] || 0) + 1;
+        
+        // レア度に応じた統計更新
+        if (['hawking_radiation', 'gravity_lens'].includes(eventType)) {
+            this.eventStats.rareEvents++;
+        }
+        if (['perfect_alignment', 'black_hole_merger', 'resonance_harmony'].includes(eventType)) {
+            this.eventStats.legendaryEvents++;
+        }
+    }
+
+    /**
+     * イベント履歴への追加
+     */
+    addToHistory(event) {
+        const historyItem = {
+            type: event.name,
+            name: this.getEventDisplayName(event.name),
+            timestamp: Date.now(),
+            realTime: new Date().toLocaleTimeString(),
+            rarity: event.rarity,
+            duration: event.duration
+        };
+        
+        this.eventHistory.unshift(historyItem);
+        if (this.eventHistory.length > this.maxHistoryLength) {
+            this.eventHistory.pop();
+        }
+    }
+
+    /**
+     * 旧バージョンの履歴追加（後方互換）
+     */
+    addEventToHistory(eventType, eventName) {
+        const event = {
+            type: eventType,
+            name: eventName,
+            timestamp: Date.now(),
+            realTime: new Date().toLocaleTimeString()
+        };
+        
+        this.eventHistory.unshift(event);
+        if (this.eventHistory.length > this.maxHistoryLength) {
+            this.eventHistory.pop();
+        }
     }
 }
 

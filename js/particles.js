@@ -1,7 +1,9 @@
 'use strict';
 
+import { AdvancedParticleSystem } from './visual-effects/advanced-particles.js';
+
 /**
- * パーティクルクラス
+ * パーティクルクラス（レガシー）
  */
 export class Particle {
     constructor(x, y, color) {
@@ -41,11 +43,15 @@ export class Particle {
 }
 
 /**
- * パーティクルシステム管理クラス
+ * パーティクルシステム管理クラス（統合版）
  */
 export class ParticleSystem {
     constructor() {
         this.particles = [];
+        
+        // 新しい高度なパーティクルシステム
+        this.advancedSystem = new AdvancedParticleSystem();
+        this.useAdvancedEffects = true;
     }
 
     /**
@@ -58,10 +64,19 @@ export class ParticleSystem {
     /**
      * 衝突エフェクトの生成
      */
-    createCollisionEffect(x, y, color1, color2) {
+    createCollisionEffect(x, y, color1, color2, energy = 1) {
+        // 座標の安全性確認
+        if (!isFinite(x) || !isFinite(y)) {
+            console.warn('パーティクル生成: 無効な座標', x, y);
+            return;
+        }
+        
+        // パーティクル数を調整（エネルギーに基づく）
+        const particleCount = Math.min(20, Math.max(5, Math.floor(energy / 10)));
+        
         // 多数のパーティクルを生成
-        for (let i = 0; i < 20; i++) {
-            const angle = (Math.PI * 2 * i) / 20;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 * i) / particleCount;
             const speed = 3 + Math.random() * 4;
             const px = x + Math.cos(angle) * 10;
             const py = y + Math.sin(angle) * 10;
@@ -88,15 +103,23 @@ export class ParticleSystem {
     }
 
     /**
-     * パーティクル更新・描画
+     * パーティクル更新・描画（統合版）
      */
     update(ctx) {
+        // レガシーパーティクルの更新
         for (let i = this.particles.length - 1; i >= 0; i--) {
             this.particles[i].update();
             this.particles[i].draw(ctx);
             if (this.particles[i].isDead()) {
                 this.particles.splice(i, 1);
             }
+        }
+        
+        // 高度なパーティクルシステムの更新
+        if (this.useAdvancedEffects) {
+            const deltaTime = 16; // 約60FPS
+            this.advancedSystem.update(deltaTime);
+            this.advancedSystem.render(ctx);
         }
     }
 
@@ -121,6 +144,9 @@ export class ParticleSystem {
      */
     clear() {
         this.particles = [];
+        if (this.advancedSystem) {
+            this.advancedSystem.clear();
+        }
     }
     
     /**
@@ -128,5 +154,31 @@ export class ParticleSystem {
      */
     clearAll() {
         this.clear();
+    }
+    
+    /**
+     * 高度なエフェクトの生成
+     */
+    createAdvancedEffect(type, ...args) {
+        if (this.useAdvancedEffects && this.advancedSystem) {
+            this.advancedSystem.createEffect(type, ...args);
+        }
+    }
+    
+    /**
+     * 高度なエフェクトのON/OFF
+     */
+    setAdvancedEffects(enabled) {
+        this.useAdvancedEffects = enabled;
+        console.log(`🎨 高度なパーティクルエフェクト: ${enabled ? '有効' : '無効'}`);
+    }
+    
+    /**
+     * パーティクル品質設定
+     */
+    setQualityLevel(level) {
+        if (this.advancedSystem) {
+            this.advancedSystem.setQualityLevel(level);
+        }
     }
 }

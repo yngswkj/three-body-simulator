@@ -2,10 +2,16 @@
 
 import { GRAPHICS_CONFIG } from './constants.js';
 import { calculateGravityFieldStrength } from './physics.js';
+import { CosmicBackground } from './visual-effects/cosmic-background.js';
+import { DynamicBodyRenderer } from './visual-effects/dynamic-bodies.js';
 
-// 星の背景用変数
+// 星の背景用変数（レガシー）
 let stars = [];
 let backgroundGenerated = false;
+
+// 新しいビジュアルエフェクトシステム
+let cosmicBackground = null;
+let dynamicBodyRenderer = null;
 
 // 重力場可視化関連
 let gravityFieldCanvas = null;
@@ -37,44 +43,19 @@ export function generateStars(canvas) {
 }
 
 /**
- * 背景描画（星のきらめき効果追加）
+ * 背景描画（新しい動的背景システム使用）
  */
 export function drawBackground(ctx, canvas) {
-    if (!backgroundGenerated) {
-        generateStars(canvas);
+    // 新しい動的背景システムの初期化
+    if (!cosmicBackground) {
+        cosmicBackground = new CosmicBackground(canvas, ctx);
+        console.log('🌌 動的背景システム初期化完了');
     }
-
-    // グラデーション背景
-    const gradient = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
-    );
-    gradient.addColorStop(0, 'rgba(20, 20, 45, 0.95)');
-    gradient.addColorStop(0.5, 'rgba(15, 15, 35, 0.97)');
-    gradient.addColorStop(1, 'rgba(10, 10, 25, 0.98)');
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 星空効果（きらめき追加）
-    for (let star of stars) {
-        star.twinkle += 0.02;
-        const twinkleIntensity = (Math.sin(star.twinkle) + 1) * 0.5;
-        const opacity = star.opacity * twinkleIntensity;
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 明るい星にはグロー効果
-        if (star.size > 1.5) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.3})`;
-            ctx.beginPath();
-            ctx.arc(star.x, star.y, star.size * 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
+    
+    // 動的背景の更新と描画
+    const deltaTime = 16; // 約60FPS
+    cosmicBackground.update(deltaTime);
+    cosmicBackground.render();
 }
 
 /**
@@ -92,229 +73,39 @@ export function setupGravityLensCanvas(canvas) {
 /**
  * ★ 追加：アインシュタインリング描画
  */
-export function drawEinsteinRings(ctx, bodies) {
-    const blackHoles = bodies.filter(body => body.type === 'blackHole' && body.isValid);
-
-    if (blackHoles.length === 0) return;
-
-    blackHoles.forEach(blackHole => {
-        drawGravityLensEffect(ctx, blackHole, bodies);
-    });
-}
+// ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
+// export function drawEinsteinRings(ctx, bodies) {
+//     // この関数は dynamic-bodies.js の renderBlackHole() で代替されました
+// }
 
 /**
- * ★ 軽量化：重力レンズ効果描画（アインシュタインリングと降着円盤のみ）
+ * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
  */
-function drawGravityLensEffect(ctx, blackHole, bodies) {
-    const bhX = blackHole.x;
-    const bhY = blackHole.y;
-    const mass = blackHole.mass;
-
-    // シュヴァルツシルト半径の計算（簡略化）
-    const schwarzschildRadius = Math.max(8, Math.sqrt(mass) * 0.9);
-
-    // 各種半径の計算
-    const einsteinRadius = schwarzschildRadius * 3.5;
-
-    ctx.save();
-
-    // ★ 1. 強化された降着円盤（維持）
-    drawEnhancedAccretionDisk(ctx, bhX, bhY, schwarzschildRadius, mass);
-
-    // ★ 2. シンプルなアインシュタインリング
-    drawSimpleEinsteinRings(ctx, bhX, bhY, einsteinRadius, mass);
-
-    // ★ 3. 事象の地平線（シンプルな球体）
-    ctx.fillStyle = blackHole.color || '#000000';
-    ctx.beginPath();
-    ctx.arc(bhX, bhY, schwarzschildRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ★ 4. シンプルな境界グロー
-    drawSimpleEventHorizonBorder(ctx, bhX, bhY, schwarzschildRadius);
-
-    ctx.restore();
-}
+// function drawGravityLensEffect(ctx, blackHole, bodies) {
+//     // この関数は dynamic-bodies.js の renderBlackHole() で代替されました
+// }
 
 /**
- * ★ 軽量化：シンプルなアインシュタインリング
+ * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
  */
-function drawSimpleEinsteinRings(ctx, x, y, baseRadius, mass) {
-    const time = Date.now() * 0.001;
+// function drawSimpleEinsteinRings(ctx, x, y, baseRadius, mass) {
+//     const time = Date.now() * 0.001;
 
-    // 主要なリング（3つに削減）
-    for (let i = 1; i <= 3; i++) {
-        const ringRadius = baseRadius * (0.8 + i * 0.4);
-        const intensity = 0.6 / Math.sqrt(i);
-        const tidalStretch = 1 + (0.2 / i); // 軽量化：引き伸ばし効果を削減
-
-        // 軽量化：振動効果を削減
-        const oscillation = Math.sin(time * 1.0 + i) * 1.0;
-
-        ctx.save();
-        ctx.translate(x, y);
-
-        // シンプルなリング描画
-        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity * 0.7})`;
-        ctx.lineWidth = 4 / i;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, ringRadius * tidalStretch + oscillation, ringRadius + oscillation * 0.2, 0, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // 内側の明るいリング
-        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity * 0.5})`;
-        ctx.lineWidth = 2 / i;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, ringRadius * tidalStretch + oscillation, ringRadius + oscillation * 0.2, 0, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    // 二次的なリング（2つに削減）
-    for (let i = 1; i <= 2; i++) {
-        const ringRadius = baseRadius * (2 + i * 0.8);
-        const intensity = 0.15 / i;
-        const extremeStretch = 1 + (0.5 / i);
-
-        ctx.save();
-        ctx.translate(x, y);
-
-        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity})`;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 4]);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, ringRadius * extremeStretch, ringRadius * 0.8, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.restore();
-    }
-}
+//     // 重複関数のため削除（dynamic-bodies.jsで代替）
+// }
 
 /**
- * ★ 軽量化：シンプルな事象の地平線境界効果
+ * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
  */
-function drawSimpleEventHorizonBorder(ctx, x, y, radius) {
-    // シンプルな境界グロー
-    const gradient = ctx.createRadialGradient(x, y, radius - 1, x, y, radius + 2);
-    gradient.addColorStop(0, 'rgba(255, 100, 100, 0)');
-    gradient.addColorStop(0.8, 'rgba(255, 100, 100, 0.4)');
-    gradient.addColorStop(1, 'rgba(255, 100, 100, 0)');
-
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.stroke();
-}
+// function drawSimpleEventHorizonBorder(ctx, x, y, radius) {
+//     // 重複関数のため削除
+// }
 
 /**
- * ★ 軽量化：降着円盤（レイヤー数を削減）
+ * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
  */
-function drawEnhancedAccretionDisk(ctx, x, y, radius, mass) {
-    const diskInnerRadius = radius * 1.5;
-    const diskOuterRadius = radius * 4; // 外径を削減
-    const time = Date.now() * 0.001;
-
-    // レイヤー数を削減（3→2）
-    for (let layer = 0; layer < 2; layer++) {
-        const layerOffset = layer * 0.5;
-        const rotationSpeed = 0.5 + layer * 0.2;
-
-        // 描画間隔を広げて軽量化
-        for (let r = diskInnerRadius; r < diskOuterRadius; r += 2.5) {
-            const alpha = Math.max(0.05, 0.5 * (diskOuterRadius - r) / (diskOuterRadius - diskInnerRadius));
-            const temp = 1.0 - (r - diskInnerRadius) / (diskOuterRadius - diskInnerRadius);
-
-            // 温度カラーマップ（維持）
-            let red, green, blue;
-            if (temp > 0.8) {
-                red = 255;
-                green = 255;
-                blue = Math.floor(255 * (temp - 0.8) / 0.2);
-            } else if (temp > 0.6) {
-                red = 255;
-                green = Math.floor(255 * (temp - 0.6) / 0.2);
-                blue = 50;
-            } else if (temp > 0.4) {
-                red = 255;
-                green = Math.floor(100 * (temp - 0.4) / 0.2);
-                blue = 0;
-            } else if (temp > 0.2) {
-                red = Math.floor(255 * (temp - 0.2) / 0.2);
-                green = 50;
-                blue = 0;
-            } else {
-                red = Math.floor(150 * temp / 0.2);
-                green = 0;
-                blue = 0;
-            }
-
-            ctx.strokeStyle = `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-            ctx.lineWidth = 1;
-
-            // スパイラル描画（角度間隔を広げて軽量化）
-            ctx.beginPath();
-            for (let angle = 0; angle < Math.PI * 4; angle += 0.15) { // 0.08→0.15に変更
-                const rotatedAngle = angle + time * rotationSpeed + layerOffset;
-                const spiralR = r + Math.sin(rotatedAngle * 4) * 2;
-                const px = x + spiralR * Math.cos(rotatedAngle);
-                const py = y + spiralR * Math.sin(rotatedAngle);
-
-                if (angle === 0) {
-                    ctx.moveTo(px, py);
-                } else {
-                    ctx.lineTo(px, py);
-                }
-            }
-            ctx.stroke();
-        }
-    }
-
-    // ジェット効果（簡略化）
-    drawSimpleAccretionJets(ctx, x, y, radius, mass);
-}
-
-/**
- * ★ 軽量化：シンプルなジェット効果
- */
-function drawSimpleAccretionJets(ctx, x, y, radius, mass) {
-    const jetLength = radius * 6; // 長さを削減
-    const time = Date.now() * 0.001;
-
-    for (let direction of [-1, 1]) {
-        const jetEndY = y + direction * jetLength;
-
-        // メインジェットのみ
-        const coreGradient = ctx.createLinearGradient(x, y, x, jetEndY);
-        coreGradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
-        coreGradient.addColorStop(0.5, 'rgba(100, 150, 255, 0.4)');
-        coreGradient.addColorStop(1, 'rgba(100, 150, 255, 0.1)');
-
-        ctx.strokeStyle = coreGradient;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, jetEndY);
-        ctx.stroke();
-
-        // 外側構造を簡略化（5→2に削減）
-        for (let i = 1; i <= 2; i++) {
-            const width = radius * 0.2 * i;
-            const alpha = 0.2 / i;
-
-            ctx.strokeStyle = `rgba(100, 150, 255, ${alpha})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(x - width, y);
-            ctx.lineTo(x - width * 0.5, jetEndY);
-            ctx.moveTo(x + width, y);
-            ctx.lineTo(x + width * 0.5, jetEndY);
-            ctx.stroke();
-        }
-    }
-}
+// ★ 削除：重複する降着円盤・ジェット描画関数群
+// これらの関数は dynamic-bodies.js で高品質版が実装済み
 
 /**
  * 重力場キャンバス設定
@@ -452,5 +243,34 @@ function getEnhancedHeatmapColor(value) {
 export function handleCanvasResize(canvas) {
     generateStars(canvas);
     setupGravityFieldCanvas(canvas);
-    setupGravityLensCanvas(canvas); // ★ 追加
+    setupGravityLensCanvas(canvas);
+    
+    // 新しい背景システムのリサイズ対応
+    if (cosmicBackground) {
+        cosmicBackground.handleResize(canvas.width, canvas.height);
+    }
+}
+
+/**
+ * 動的天体レンダラーの取得（必要に応じて初期化）
+ */
+export function getDynamicBodyRenderer(ctx) {
+    if (!dynamicBodyRenderer) {
+        dynamicBodyRenderer = new DynamicBodyRenderer();
+        console.log('✨ 動的天体レンダラー初期化完了');
+    }
+    return dynamicBodyRenderer;
+}
+
+/**
+ * ビジュアルエフェクト品質設定
+ */
+export function setVisualQuality(qualityLevel) {
+    if (cosmicBackground) {
+        cosmicBackground.adjustQuality(60 * qualityLevel);
+    }
+    if (dynamicBodyRenderer) {
+        dynamicBodyRenderer.setQualityLevel(qualityLevel);
+    }
+    console.log(`🎨 ビジュアル品質設定: ${qualityLevel}`);
 }

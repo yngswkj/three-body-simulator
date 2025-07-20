@@ -384,7 +384,32 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
             // ★ 修正：実行中でも天体作成を許可、パーティクルシステムを取得
             try {
                 const ctx = canvas.getContext('2d');
-                const newMass = 25 + Math.random() * 20;
+                // ★ 修正：画面クリックでは恒星分類範囲のみ生成
+                const stellarRand = Math.random();
+                let newMass;
+                
+                if (stellarRand < 0.4) {
+                    // 40%: M型星（質量10-25）
+                    newMass = 10 + Math.random() * 15;
+                } else if (stellarRand < 0.6) {
+                    // 20%: K型星（質量25-35）
+                    newMass = 25 + Math.random() * 10;
+                } else if (stellarRand < 0.75) {
+                    // 15%: G型星（質量35-45）
+                    newMass = 35 + Math.random() * 10;
+                } else if (stellarRand < 0.85) {
+                    // 10%: F型星（質量45-55）
+                    newMass = 45 + Math.random() * 10;
+                } else if (stellarRand < 0.93) {
+                    // 8%: A型星（質量55-65）
+                    newMass = 55 + Math.random() * 10;
+                } else if (stellarRand < 0.98) {
+                    // 5%: B型星（質量65-75）
+                    newMass = 65 + Math.random() * 10;
+                } else {
+                    // 2%: O型星（質量75-80）
+                    newMass = 75 + Math.random() * 5;
+                }
 
                 // ★ 修正：パーティクルシステムを適切に取得・渡す
                 // simulatorからパーティクルシステムを取得する必要がある
@@ -740,8 +765,8 @@ function updateEventDisplay(eventStats) {
 
     eventStatsContent.innerHTML = content;
 
-    // デバッグログ（頻度を下げる）
-    if (eventStats.totalEvents > 0 && eventStats.totalEvents % 3 === 0) {
+    // デバッグログ（頻度を大幅に下げる）
+    if (eventStats.totalEvents > 0 && eventStats.totalEvents % 20 === 0) {
         console.log('🎆 特殊イベント統計更新:', {
             総イベント数: eventStats.totalEvents,
             レアイベント: eventStats.rareEvents,
@@ -774,3 +799,58 @@ export const uiState = {
     set mousePos(value) { mousePos = value; },
     set dragStartPos(value) { dragStartPos = value; }
 };
+
+/**
+ * ウェルカムモーダルの初期化
+ */
+export function initializeWelcomeModal() {
+    const welcomeOverlay = document.getElementById('welcomeOverlay');
+    const startButton = document.getElementById('startSimulation');
+    const helpButton = document.getElementById('showDetailedHelp');
+    const helpButtonControl = document.getElementById('helpButton');
+    const helpButtonMobile = document.getElementById('helpButtonMobile');
+    const helpPopup = document.getElementById('helpPopup');
+    const helpOverlay = document.getElementById('helpOverlay');
+    
+    // 初期表示でウェルカムモーダルを表示
+    if (welcomeOverlay) {
+        welcomeOverlay.style.display = 'flex';
+    }
+    
+    // ヘルプ表示関数
+    const showHelp = () => {
+        if (welcomeOverlay) {
+            welcomeOverlay.style.display = 'none';
+        }
+        if (helpPopup && helpOverlay) {
+            helpPopup.style.display = 'block';
+            helpOverlay.style.display = 'block';
+        }
+    };
+    
+    // シミュレーション開始ボタン
+    if (startButton) {
+        startButton.addEventListener('click', () => {
+            if (welcomeOverlay) {
+                welcomeOverlay.style.display = 'none';
+            }
+        });
+    }
+    
+    // 詳細ヘルプボタン（ウェルカムモーダル内）
+    if (helpButton) {
+        helpButton.addEventListener('click', showHelp);
+    }
+    
+    // コントロールパネル内ヘルプボタン
+    if (helpButtonControl) {
+        helpButtonControl.addEventListener('click', showHelp);
+    }
+    
+    // モバイル用ヘルプボタン
+    if (helpButtonMobile) {
+        helpButtonMobile.addEventListener('click', showHelp);
+    }
+    
+    console.log('🎉 ウェルカムモーダル初期化完了');
+}

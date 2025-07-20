@@ -121,6 +121,10 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
                 const relativeVy = victim.vy - survivor.vy;
                 const impactSpeed = Math.sqrt(relativeVx * relativeVx + relativeVy * relativeVy);
 
+                // 衝突エネルギーの計算（運動エネルギー）
+                const reducedMass = (survivor.mass * victim.mass) / totalMass;
+                const totalEnergy = 0.5 * reducedMass * impactSpeed * impactSpeed;
+
                 // 質量の重心で新しい位置を計算
                 const newX = (survivor.mass * survivor.x + victim.mass * victim.x) / totalMass;
                 const newY = (survivor.mass * survivor.y + victim.mass * victim.y) / totalMass;
@@ -133,8 +137,14 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
                 survivor.mass = Math.min(totalMass, 400);
                 survivor.trail = [];
 
-                // 衝突エフェクト生成
-                createCollisionEffect(newX, newY, survivor.color, victim.color);
+                // 衝突エフェクト生成（安全性確保）
+                if (createCollisionEffect && typeof createCollisionEffect === 'function') {
+                    try {
+                        createCollisionEffect(newX, newY, survivor.color, victim.color, totalEnergy);
+                    } catch (error) {
+                        console.warn('衝突エフェクト生成エラー:', error);
+                    }
+                }
 
                 // 被害者を無効化
                 victim.isValid = false;

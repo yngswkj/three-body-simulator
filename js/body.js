@@ -2,6 +2,8 @@
 
 import { BODY_TYPE_THRESHOLDS } from './constants.js';
 import { Particle } from './particles.js';
+import { stellarClassifier, STELLAR_CLASSES, EVOLUTION_STAGES } from './stellar-classification.js';
+import { KerrBlackHole } from './kerr-blackhole.js';
 
 /**
  * 天体クラス
@@ -17,7 +19,7 @@ export class Body {
 
         // 視覚効果パラメータ
         this.trail = [];
-        this.color = this.generateColor();
+        this.color = null; // ★ 修正：後で恒星分類により設定
 
         // アニメーション制御パラメータ
         this.trailUpdateCounter = 0;
@@ -37,6 +39,9 @@ export class Body {
         this.isBlackHole = this.type === 'blackHole';
         this.blackHoleRotation = 0;
         this.eventHorizonRadius = 0;
+        
+        // ★ 追加：カー・ブラックホール
+        this.kerrBlackHole = null;
 
         // パルサー専用パラメータ
         this.pulsarAge = 0;
@@ -45,6 +50,12 @@ export class Body {
 
         // パーティクルシステムの参照
         this.particleSystem = particleSystem;
+
+        // ★ 追加：恒星分類システム
+        this.stellarAge = Math.random() * 1e9; // ランダム年齢（年）
+        this.stellarClass = null;
+        this.evolutionStage = null;
+        this.surfaceActivity = 0.5;
 
         // ★ 追加：太陽黒点管理用プロパティ
         this.sunspots = [];
@@ -59,8 +70,16 @@ export class Body {
         this.sunspotUpdateInterval = 3000 + Math.random() * 6000; // 5-15秒間隔
         this.maxSunspots = 2 + Math.floor(Math.random() * 3); // 2-4個
 
+        // ★ 改善：恒星分類を先に初期化
+        this.initializeStellarClassification();
+        
         // 初期化完了
         this.initializeByType();
+        
+        // ★ 追加：色が設定されていない場合のフォールバック
+        if (!this.color) {
+            this.color = this.generateColor();
+        }
     }
 
     // 天体タイプ判定ロジック
@@ -130,11 +149,15 @@ export class Body {
                 console.log(`パルサー誕生: 質量 ${this.mass.toFixed(1)}, 磁場強度 ${this.magneticField.toFixed(2)}, 回転周期 ${this.rotationPeriod.toFixed(3)}s`);
                 break;
             case 'planetSystem':
-                this.color = '#FFD700';
+                // ★ 修正：恒星分類により色が設定されていない場合のみフォールバック
+                if (!this.color) {
+                    this.color = '#FFD700';
+                }
                 this.generatePlanets();
                 break;
             default:
-                if (!this.color || this.type === 'normal') {
+                // ★ 修正：恒星分類により色が設定されている場合は変更しない
+                if (!this.color) {
                     this.color = this.generateColor();
                 }
                 break;
@@ -145,8 +168,23 @@ export class Body {
     becomeBlackHole() {
         this.isBlackHole = true;
         this.color = '#000000';
-        this.eventHorizonRadius = Math.sqrt(this.mass) * 2;
-        console.log(`ブラックホール誕生！質量: ${this.mass.toFixed(1)}`);
+        
+        // ★ 改善：カー・ブラックホールの初期化
+        const spin = 0.2 + Math.random() * 0.7; // 0.2-0.9のランダムスピン
+        this.kerrBlackHole = new KerrBlackHole(this.mass, spin);
+        
+        // ★ 強制：ブラックホールのサイズを適切に調整（質量に比例）
+        const visualRadius = Math.max(10, Math.sqrt(this.mass) * 1.6); // 質量100→半径16, 質量400→半径32
+        this.eventHorizonRadius = visualRadius;
+        
+        // ★ カー・ブラックホールの計算値も更新
+        this.kerrBlackHole.eventHorizonRadius = visualRadius;
+        
+        // ★ フラグでサイズ固定を管理
+        this._blackHoleSizeFixed = true;
+        this._fixedEventHorizonRadius = visualRadius;
+        
+        console.log(`🌀 カー・ブラックホール誕生！質量: ${this.mass.toFixed(1)}, スピン: ${spin.toFixed(3)}`);
 
         this.createBlackHoleBirthEffect();
     }
@@ -168,6 +206,66 @@ export class Body {
             particle.life = 2.0;
             particle.size = 3 + Math.random() * 4;
             this.particleSystem.addParticle(particle);
+        }
+    }
+
+    /**
+     * ★ 追加：恒星分類の初期化
+     */
+    initializeStellarClassification() {
+        console.log(`🔍 恒星分類チェック: タイプ=${this.type}, 質量=${this.mass}`);
+        
+        // 通常星のみ恒星分類を適用（質量10-80未満の範囲）
+        if (this.type === 'normal') {
+            this.stellarClass = stellarClassifier.classifyByMass(this.mass);
+            
+            if (this.stellarClass) {
+                // 恒星分類が成功した場合
+                this.evolutionStage = stellarClassifier.determineEvolutionStage(
+                    this.stellarClass, 
+                    this.stellarAge, 
+                    this.stellarClass.solarMass
+                );
+                this.surfaceActivity = stellarClassifier.calculateSurfaceActivity(
+                    this.stellarClass,
+                    this.evolutionStage,
+                    this.stellarAge
+                );
+                
+                // 恒星分類に基づく色の更新
+                this.updateColorByStellarClass();
+                
+                // 温度の設定
+                this.temperature = this.stellarClass.data.temp / 5800; // 太陽温度で正規化
+                
+                console.log(`🌟 恒星分類適用: ${this.stellarClass.data.name} (${this.stellarClass.type}型) → 色: ${this.color}`);
+            } else {
+                // 恒星分類範囲外（質量80以上の通常星）
+                console.log(`⚪ 恒星分類範囲外の通常星: 質量${this.mass} → デフォルト色使用`);
+            }
+        } else {
+            console.log(`⚪ 恒星分類対象外: ${this.type}`);
+        }
+    }
+
+    /**
+     * ★ 追加：恒星分類に基づく色更新
+     */
+    updateColorByStellarClass() {
+        if (this.stellarClass && this.evolutionStage) {
+            // 進化段階による温度補正
+            const tempMult = this.evolutionStage.tempMult || 1.0;
+            const adjustedTemp = this.stellarClass.data.temp * tempMult;
+            
+            console.log(`🎨 色計算: ${this.stellarClass.type}型, 温度=${adjustedTemp}K`);
+            
+            // 温度から色を計算
+            const rgb = stellarClassifier.getColorFromTemperature(adjustedTemp);
+            this.color = stellarClassifier.rgbToHex(rgb);
+            
+            console.log(`🎨 色設定完了: RGB=${rgb} → HEX=${this.color}`);
+        } else {
+            console.log(`❌ 色更新失敗: stellarClass=${!!this.stellarClass}, evolutionStage=${!!this.evolutionStage}`);
         }
     }
 
@@ -311,7 +409,26 @@ export class Body {
         switch (this.type) {
             case 'blackHole':
                 this.blackHoleRotation += 0.02;
-                this.eventHorizonRadius = Math.sqrt(this.mass) * 1.5;
+                
+                // ★ ガード：サイズが固定されている場合は更新しない
+                if (!this._blackHoleSizeFixed) {
+                    this.eventHorizonRadius = Math.sqrt(this.mass) * 1.5;
+                    
+                    // ★ 追加：カー・ブラックホールの更新
+                    if (this.kerrBlackHole) {
+                        this.kerrBlackHole.update(dt);
+                        this.eventHorizonRadius = this.kerrBlackHole.eventHorizonRadius;
+                    }
+                } else {
+                    // ★ 固定サイズを保持
+                    this.eventHorizonRadius = this._fixedEventHorizonRadius;
+                    
+                    // ★ カー・ブラックホールのアニメーションのみ更新
+                    if (this.kerrBlackHole) {
+                        this.kerrBlackHole.update(dt);
+                        // サイズは上書きしない
+                    }
+                }
                 break;
             case 'neutronStar':
                 this.rotation += 0.05;
@@ -391,6 +508,13 @@ export class Body {
 
     // 日本語タイプ名取得
     getTypeNameJapanese(type = this.type) {
+        // ★ 改善：恒星分類を反映
+        if ((type === 'normal' || type === 'planetSystem') && this.stellarClass) {
+            const baseName = type === 'planetSystem' ? '惑星系' : '';
+            const evolutionName = this.evolutionStage ? ` (${this.evolutionStage.name})` : '';
+            return `${this.stellarClass.data.name}${baseName}${evolutionName}`;
+        }
+        
         const typeNames = {
             'normal': '通常星',
             'whiteDwarf': '白色矮星',
@@ -571,7 +695,7 @@ export class Body {
             // ★ 変更：タイプ別描画
             switch (this.type) {
                 case 'blackHole':
-                    this.drawBlackHole(ctx);
+                    // ★ 修正：ブラックホールはdynamicBodyRendererで描画するためスキップ
                     break;
                 case 'neutronStar':
                     this.drawNeutronStar(ctx);
@@ -1041,57 +1165,8 @@ export class Body {
         });
     }
 
-    // ★ 追加：ブラックホール描画
-    drawBlackHole(ctx) {
-        const radius = this.eventHorizonRadius;
-
-        // 降着円盤の描画
-        for (let ring = 4; ring >= 1; ring--) {
-            const ringRadius = radius * (2 + ring * 0.5);
-            const ringGradient = ctx.createRadialGradient(this.x, this.y, radius, this.x, this.y, ringRadius);
-
-            const intensity = 0.3 / ring;
-            const rotation = this.blackHoleRotation * ring * 0.5;
-
-            ringGradient.addColorStop(0, 'transparent');
-            ringGradient.addColorStop(0.3, `rgba(255, 107, 0, ${intensity})`);
-            ringGradient.addColorStop(0.7, `rgba(255, 69, 0, ${intensity * 0.7})`);
-            ringGradient.addColorStop(1, 'transparent');
-
-            ctx.fillStyle = ringGradient;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, ringRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // 重力レンズ効果（歪み表現）
-        const lensRadius = radius * 4;
-        const lensGradient = ctx.createRadialGradient(this.x, this.y, radius, this.x, this.y, lensRadius);
-        lensGradient.addColorStop(0, 'transparent');
-        lensGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.05)');
-        lensGradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.1)');
-        lensGradient.addColorStop(1, 'transparent');
-
-        ctx.fillStyle = lensGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, lensRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 事象の地平線（完全な黒）
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 事象の地平線の境界
-        ctx.strokeStyle = 'rgba(2, 2, 2, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
+    // ★ 削除：重複描画関数を削除（dynamic-bodies.jsで高品質版を使用）
+    // drawBlackHole() は dynamic-bodies.js の renderBlackHole() で代替
 
     // ★ 追加：通常天体描画（既存のdraw内容を移動）
     drawNormalBody(ctx) {

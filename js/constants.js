@@ -10,7 +10,7 @@ export const PHYSICS_CONSTANTS = {
     BOUNDARY_DAMPING: 0.8
 };
 
-// ★ 天体タイプ閾値
+// ★ 天体タイプ閾値（元の値に戻す）
 export const BODY_TYPE_THRESHOLDS = {
     WHITE_DWARF: 80,
     PULSAR: 160,

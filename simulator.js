@@ -16,6 +16,7 @@ import {
     handleEnd,
     showError,
     updateDisplay as uiUpdateDisplay,
+    initializeWelcomeModal,
     uiState
 } from './js/ui.js';
 import {
@@ -23,7 +24,8 @@ import {
     setupGravityFieldCanvas,
     calculateAndDrawGravityField,
     handleCanvasResize,
-    drawEinsteinRings // ★ 追加
+    getDynamicBodyRenderer,
+    setVisualQuality
 } from './js/graphics.js';
 import { ParticleSystem } from './js/particles.js';
 import { Body } from './js/body.js';
@@ -62,8 +64,11 @@ let frameCount = 0;
 let lastFpsUpdate = Date.now();
 let currentFps = 60;
 
-// パーティクルシステム
+// パーティクルシステム（統合版）
 const particleSystem = new ParticleSystem();
+
+// 動的天体レンダラー
+let dynamicBodyRenderer = null;
 
 // ★ 追加：特殊イベントマネージャー
 const specialEvents = new SpecialEventsManager();
@@ -96,11 +101,27 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// 物理計算のラッパー関数
+// 物理計算のラッパー関数（強化版）
 function handleCollisionsWrapper(validBodies) {
-    physicsHandleCollisions(validBodies, collisionSensitivity,
-        (x, y, color1, color2) => particleSystem.createCollisionEffect(x, y, color1, color2),
-        time);
+    const collisionCallback = (x, y, color1, color2, energy = 1) => {
+        if (!particleSystem) return;
+        
+        try {
+            // 従来の衝突エフェクト（エネルギー値を渡す）
+            if (typeof particleSystem.createCollisionEffect === 'function') {
+                particleSystem.createCollisionEffect(x, y, color1, color2, energy);
+            }
+            
+            // 高度なエネルギーバーストエフェクト
+            if (energy > 50 && typeof particleSystem.createAdvancedEffect === 'function') {
+                particleSystem.createAdvancedEffect('energy_burst', x, y, energy / 100);
+            }
+        } catch (error) {
+            console.warn('衝突エフェクト生成エラー:', error);
+        }
+    };
+    
+    physicsHandleCollisions(validBodies, collisionSensitivity, collisionCallback, time);
 }
 
 /**
@@ -179,14 +200,90 @@ function animate() {
         const dt = timeStep * speed;
         bodies = calculateGravity(bodies, gravity, dt, enableCollisions, handleCollisionsWrapper);
 
-        // 天体更新・描画
+        // 動的天体描画システムの準備
+        if (!dynamicBodyRenderer) {
+            dynamicBodyRenderer = getDynamicBodyRenderer(ctx);
+        }
+        
+        // 時間更新（アニメーションのため）- 1回のみ実行
+        dynamicBodyRenderer.update(timeStep * 1000);
+        
+        // 天体更新・描画（強化版）
         bodies.forEach(body => {
             body.update(dt, showTrails, trailLength, canvas);
-            body.draw(ctx, showTrails);
+            
+            // 天体タイプに応じた高度な描画
+            if (body.type === 'blackHole') {
+                try {
+                    // ★ 高度レンダラーに戻す
+                    const useAdvancedRenderer = true; // サイズ修正完了のため高度レンダラーを使用
+                    
+                    if (useAdvancedRenderer && dynamicBodyRenderer && typeof dynamicBodyRenderer.renderBlackHole === 'function') {
+                        // console.log(`🖤 ブラックホール描画開始: 質量=${body.mass}, 事象の地平線=${body.eventHorizonRadius}`);
+                        dynamicBodyRenderer.renderBlackHole(ctx, body);
+                        // console.log(`✅ ブラックホール描画完了`);
+                    } else {
+                        // console.log(`🔧 フォールバック描画使用: 質量=${body.mass}, 元の半径=${body.eventHorizonRadius}`);
+                        // フォールバック：シンプルなブラックホール描画
+                        // ★ 設定：ブラックホールのサイズを大幅拡大
+                        const radius = body.eventHorizonRadius || Math.max(50, Math.sqrt(body.mass) * 8);
+                        // console.log(`📏 描画半径: ${radius} (元=${body.eventHorizonRadius}, 基準=${baseRadius})`);
+                        
+                        // 降着円盤
+                        for (let ring = 1; ring <= 3; ring++) {
+                            const ringRadius = radius * (2 + ring * 0.5);
+                            ctx.strokeStyle = `rgba(255, 150, 50, ${0.3 / ring})`;
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.arc(body.x, body.y, ringRadius, 0, Math.PI * 2);
+                            ctx.stroke();
+                        }
+                        
+                        // 事象の地平線
+                        ctx.fillStyle = '#000000';
+                        ctx.beginPath();
+                        ctx.arc(body.x, body.y, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 境界
+                        ctx.strokeStyle = 'rgba(255, 100, 0, 0.5)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.arc(body.x, body.y, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                } catch (error) {
+                    console.error('ブラックホール描画エラー:', error);
+                    // エラー時のフォールバック描画
+                    body.draw(ctx, showTrails);
+                }
+            } else if (body.type === 'pulsar' || body.type === 'neutronStar' || body.type === 'whiteDwarf') {
+                // 特殊天体は動的レンダラーで描画
+                switch (body.type) {
+                    case 'pulsar':
+                        dynamicBodyRenderer.renderPulsar(ctx, body);
+                        break;
+                    case 'neutronStar':
+                        dynamicBodyRenderer.renderNeutronStar(ctx, body);
+                        break;
+                    default:
+                        body.draw(ctx, showTrails);
+                        break;
+                }
+            } else if (body.type === 'planetSystem') {
+                // 惑星系は従来の描画方法を使用
+                body.draw(ctx, showTrails);
+            } else if (body.type === 'star' || (body.mass > 50 && body.stellarProperties)) {
+                // 明示的に恒星として設定された天体、または恒星プロパティを持つ大質量天体
+                dynamicBodyRenderer.renderStar(ctx, body);
+            } else {
+                // 通常描画
+                body.draw(ctx, showTrails);
+            }
         });
 
-        // ★ 追加：アインシュタインリング描画（天体描画後、パーティクル描画前）
-        drawEinsteinRings(ctx, bodies);
+        // ★ 削除：重複描画を除去（dynamic-bodies.jsで既に描画済み）
+        // drawEinsteinRings(ctx, bodies);
 
         // ★ 追加：特殊イベントの更新と描画（シミュレーション時間を渡す）
         specialEvents.update(bodies, time, ctx, canvas);
@@ -196,14 +293,22 @@ function animate() {
             bodyLauncher.render(bodies);
         }
 
-        // パーティクル管理
-        particleSystem.update(ctx);
+        // パーティクル管理（安全性チェック）
+        if (particleSystem && typeof particleSystem.update === 'function') {
+            try {
+                particleSystem.update(ctx);
+            } catch (error) {
+                console.warn('パーティクルシステム更新エラー:', error);
+            }
+        }
 
         // パーティクル数制限（モバイル最適化適用）
-        const baseMaxParticles = performanceMonitor.getMaxParticles();
-        const mobileMaxParticles = mobileOptimization.getParticleLimit();
-        const maxParticles = Math.min(baseMaxParticles, mobileMaxParticles);
-        particleSystem.limitParticles(maxParticles);
+        if (particleSystem && typeof particleSystem.limitParticles === 'function') {
+            const baseMaxParticles = performanceMonitor.getMaxParticles();
+            const mobileMaxParticles = mobileOptimization.getParticleLimit();
+            const maxParticles = Math.min(baseMaxParticles, mobileMaxParticles);
+            particleSystem.limitParticles(maxParticles);
+        }
 
         // ★ 追加：ブラックホールのデバッグ情報（パーティクルシステム状態も含む）
         const blackHoles = bodies.filter(body => body.type === 'blackHole');
@@ -239,6 +344,12 @@ function animate() {
                             body.trail = body.trail.slice(-trailLength);
                         }
                     });
+                    
+                    // ビジュアルエフェクト品質調整
+                    const qualityLevel = currentFps > 45 ? 1.0 : (currentFps > 30 ? 0.7 : 0.5);
+                    setVisualQuality(qualityLevel);
+                    particleSystem.setQualityLevel(qualityLevel);
+                    
                 } catch (error) {
                     console.warn('定期リセットでエラーが発生:', error);
                     // エラーが発生しても軽量リセットを試行
@@ -390,7 +501,7 @@ function resetSimulation() {
         }
     }
 
-    console.log('シミュレーションをリセットしました（最適化レベル・イベント統計も初期化）');
+    // シミュレーションをリセットしました（最適化レベル・イベント統計も初期化）
 }
 
 document.getElementById('reset')?.addEventListener('click', resetSimulation);
@@ -429,7 +540,7 @@ function clearSimulation() {
     });
     bodyLauncher.render(bodies);
 
-    console.log('天体をクリアしました（最適化レベル・イベント統計も初期化）');
+    // 天体をクリアしました（最適化レベル・イベント統計も初期化）
 }
 
 document.getElementById('clear')?.addEventListener('click', clearSimulation);
@@ -556,8 +667,11 @@ function setPreset(type) {
 
         switch (type) {
             case 'binary':
-                bodies.push(new Body(cx - 40, cy, 30, 30, 35, particleSystem));
-                bodies.push(new Body(cx + 40, cy, -30, -30, 35, particleSystem));
+                // ★ 修正：異なる恒星タイプの連星系
+                const mass1 = 35 + Math.random() * 30; // G/F型星（質量35-65）
+                const mass2 = 15 + Math.random() * 25; // K/M型星（質量15-40）
+                bodies.push(new Body(cx - 40, cy, 30, 30, mass1, particleSystem));
+                bodies.push(new Body(cx + 40, cy, -30, -30, mass2, particleSystem));
                 break;
 
             case 'triangle':
@@ -568,14 +682,18 @@ function setPreset(type) {
                     const y = cy + r * Math.sin(angle);
                     const vx = -35 * Math.sin(angle);
                     const vy = 35 * Math.cos(angle);
-                    bodies.push(new Body(x, y, vx, vy, 30, particleSystem));
+                    // ★ 修正：多様な恒星タイプ
+                    const mass = [25, 45, 70][i] + Math.random() * 15;
+                    bodies.push(new Body(x, y, vx, vy, mass, particleSystem));
                 }
                 break;
 
             case 'figure_eight':
-                bodies.push(new Body(cx, cy, 25, 38, 28, particleSystem));
-                bodies.push(new Body(cx - 180, cy, -12.5, -19, 28, particleSystem));
-                bodies.push(new Body(cx + 180, cy, -12.5, -19, 28, particleSystem));
+                // ★ 修正：8の字軌道も異なる恒星タイプで
+                const masses = [30, 50, 120].map(m => m + Math.random() * 20);
+                bodies.push(new Body(cx, cy, 25, 38, masses[0], particleSystem));
+                bodies.push(new Body(cx - 180, cy, -12.5, -19, masses[1], particleSystem));
+                bodies.push(new Body(cx + 180, cy, -12.5, -19, masses[2], particleSystem));
                 break;
 
             case 'random':
@@ -585,7 +703,21 @@ function setPreset(type) {
                     const y = 120 + Math.random() * (canvas.height - 240);
                     const vx = (Math.random() - 0.5) * 60;
                     const vy = (Math.random() - 0.5) * 60;
-                    const mass = 20 + Math.random() * 25;
+                    
+                    // ★ 修正：多様な天体を生成（元の質量範囲）
+                    const rand = Math.random();
+                    let mass;
+                    if (rand < 0.5) {
+                        // 50%: 恒星分類対象（質量10-80）
+                        mass = 10 + Math.random() * 70;
+                    } else if (rand < 0.8) {
+                        // 30%: 白色矮星～中性子星（質量80-250）
+                        mass = 80 + Math.random() * 170;
+                    } else {
+                        // 20%: 惑星系～ブラックホール（質量250-500）
+                        mass = 250 + Math.random() * 250;
+                    }
+                    
                     bodies.push(new Body(x, y, vx, vy, mass, particleSystem));
                 }
                 break;
@@ -883,8 +1015,9 @@ try {
         }
     });
 
-    // ツールチップの初期化
+    // ツールチップとウェルカムモーダルの初期化
     initializeTooltip();
+    initializeWelcomeModal();
 
     // スライダーの初期値を設定
     const speedValue = document.getElementById('speedValue');
@@ -909,11 +1042,9 @@ try {
         console.warn('FPS表示要素が見つかりません');
     }
 
-    // ★ 追加：特殊イベントシステムの初期化確認
-    console.log('特殊イベントシステムの初期化確認...');
+    // ★ 追加：特殊イベントシステムの初期化確認（簡略化）
     if (specialEvents && typeof specialEvents.getEventStats === 'function') {
-        console.log('✓ 特殊イベントシステムが正常に初期化されました');
-        console.log('✓ getEventStats メソッドが利用可能です');
+        // 特殊イベントシステムが正常に初期化されました
     } else {
         console.error('✗ 特殊イベントシステムの初期化に失敗しました');
     }
@@ -922,7 +1053,7 @@ try {
     const eventStatsElement = document.getElementById('eventStats');
     if (eventStatsElement) {
         eventStatsElement.style.display = 'block'; // ★ 常に表示に変更
-        console.log('イベント統計表示を初期化しました（常時表示）');
+        // イベント統計表示を初期化しました（常時表示）
     } else {
         console.warn('イベント統計表示要素が見つかりません');
     }
@@ -936,11 +1067,100 @@ try {
 
     drawBackground(ctx, canvas);
 
+    // ★ 追加：開発者モード機能の初期化
+    setupDeveloperMode();
+
     console.log('🚀 三体問題シミュレータが初期化されました（完全モジュール分割版）');
 
 } catch (error) {
     console.error('Initialization error:', error);
     showError('初期化エラーが発生しました。');
+}
+
+/**
+ * ★ 追加：開発者モード機能の設定
+ */
+function setupDeveloperMode() {
+    const devModeToggle = document.getElementById('devModeToggle');
+    const specialEventsPanel = document.getElementById('specialEventsPanel');
+    
+    if (!devModeToggle || !specialEventsPanel) {
+        console.warn('開発者モード要素が見つかりません');
+        return;
+    }
+    
+    let developerMode = false;
+    
+    // 開発者モード切り替え
+    devModeToggle.addEventListener('click', () => {
+        developerMode = !developerMode;
+        
+        if (developerMode) {
+            devModeToggle.classList.add('active');
+            devModeToggle.textContent = '開発者モード ON';
+            specialEventsPanel.style.display = 'block';
+            console.log('🛠️ 開発者モードを有効化しました');
+        } else {
+            devModeToggle.classList.remove('active');
+            devModeToggle.textContent = '開発者モード';
+            specialEventsPanel.style.display = 'none';
+            console.log('🛠️ 開発者モードを無効化しました');
+        }
+    });
+    
+    // 特殊イベントトリガーボタンの設定
+    const eventButtons = [
+        { id: 'triggerCosmicStorm', event: 'cosmic_storm', name: '宇宙嵐' },
+        { id: 'triggerSolarFlare', event: 'solar_flare', name: '太陽フレア' },
+        { id: 'triggerHawkingRadiation', event: 'hawking_radiation', name: 'ホーキング輻射' },
+        { id: 'triggerGravityLens', event: 'gravity_lens', name: '重力レンズ' },
+        { id: 'triggerPerfectAlignment', event: 'perfect_alignment', name: '完璧な整列' },
+        { id: 'triggerBlackHoleMerger', event: 'black_hole_merger', name: 'ブラックホール合体' },
+        { id: 'triggerResonanceHarmony', event: 'resonance_harmony', name: '共鳴ハーモニー' },
+        { id: 'triggerQuantumFluctuation', event: 'quantum_fluctuation', name: '量子ゆらぎ' }
+    ];
+    
+    eventButtons.forEach(({ id, event, name }) => {
+        const button = document.getElementById(id);
+        if (button) {
+            button.addEventListener('click', () => {
+                if (!developerMode) {
+                    console.warn('開発者モードが無効です');
+                    return;
+                }
+                
+                try {
+                    // 特殊イベントを強制発生
+                    if (specialEvents && typeof specialEvents.triggerEvent === 'function') {
+                        specialEvents.triggerEvent(event, bodies, particleSystem, ctx, canvas);
+                        console.log(`🎯 開発者モード: ${name}を発生させました`);
+                        
+                        // ボタンの視覚的フィードバック
+                        button.style.transform = 'scale(0.95)';
+                        button.style.boxShadow = '0 0 20px rgba(255, 107, 107, 0.8)';
+                        
+                        setTimeout(() => {
+                            button.style.transform = '';
+                            button.style.boxShadow = '';
+                        }, 200);
+                        
+                        // 統計更新
+                        updateDisplay();
+                    } else {
+                        console.error('特殊イベントシステムが利用できません');
+                        showError('特殊イベントシステムエラー');
+                    }
+                } catch (error) {
+                    console.error(`${name}の発生でエラー:`, error);
+                    showError(`${name}の発生に失敗しました`);
+                }
+            });
+        } else {
+            console.warn(`特殊イベントボタンが見つかりません: ${id}`);
+        }
+    });
+    
+    console.log('🛠️ 開発者モード機能を初期化しました');
 }
 
 /**
