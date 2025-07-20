@@ -115,6 +115,12 @@ export class AdvancedParticle {
             case 'wormhole':
                 this.updateWormhole(deltaTime);
                 break;
+            case 'lensing_photon':
+                this.updateLensingPhoton(deltaTime);
+                break;
+            case 'spacetime_bubble':
+                this.updateSpacetimeBubble(deltaTime);
+                break;
         }
     }
     
@@ -221,6 +227,40 @@ export class AdvancedParticle {
         this.updateWormholeColor(depth);
     }
     
+    updateLensingPhoton(deltaTime) {
+        // 重力レンズ効果による光子の軌道
+        const data = this.behaviorData;
+        
+        // ブラックホールとの距離
+        const dx = data.blackHoleX - this.x;
+        const dy = data.blackHoleY - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // 重力による軌道の曲がり（アインシュタインの一般相対性理論）
+        const gravitationalStrength = data.mass / (distance * distance + 1);
+        const deflectionAngle = gravitationalStrength * deltaTime * 0.1;
+        
+        // 速度ベクトルの回転（光線の曲がり）
+        const currentAngle = Math.atan2(this.vy, this.vx);
+        const targetAngle = Math.atan2(dy, dx);
+        const angleToBlackHole = targetAngle - currentAngle;
+        
+        // 軌道の曲がり効果
+        const bendEffect = Math.sin(angleToBlackHole) * deflectionAngle;
+        const newAngle = currentAngle + bendEffect;
+        
+        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        this.vx = Math.cos(newAngle) * speed;
+        this.vy = Math.sin(newAngle) * speed;
+        
+        // 赤方偏移効果（重力による周波数変化）
+        const redshiftFactor = 1 + gravitationalStrength * 0.1;
+        this.updatePhotonColor(redshiftFactor);
+        
+        // 距離による減衰
+        this.opacity *= 0.998;
+    }
+    
     updatePlasmaColor(temperature) {
         // 温度に基づくプラズマの色変化
         if (temperature > 0.8) {
@@ -242,6 +282,21 @@ export class AdvancedParticle {
         const saturation = 70;
         const lightness = 60 * (1 - depth * 0.5);
         this.color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+    
+    updatePhotonColor(redshiftFactor) {
+        // 赤方偏移による光子の色変化
+        if (redshiftFactor > 1.2) {
+            this.color = '#ff0000'; // 赤方偏移
+        } else if (redshiftFactor > 1.1) {
+            this.color = '#ffaa00'; // オレンジ
+        } else if (redshiftFactor < 0.9) {
+            this.color = '#0088ff'; // 青方偏移
+        } else if (redshiftFactor < 0.95) {
+            this.color = '#00aaff'; // 青
+        } else {
+            this.color = '#ffffff'; // 白色光
+        }
     }
     
     applyMagneticForce(magneticField) {
@@ -271,6 +326,12 @@ export class AdvancedParticle {
                 break;
             case 'energy_burst':
                 this.drawEnergyBurst(ctx);
+                break;
+            case 'spacetime_bubble':
+                this.drawSpacetimeBubble(ctx);
+                break;
+            case 'bubble_fragment':
+                this.drawBubbleFragment(ctx);
                 break;
             default:
                 this.drawDefault(ctx);
@@ -358,6 +419,83 @@ export class AdvancedParticle {
         ctx.fill();
     }
     
+    drawSpacetimeBubble(ctx) {
+        if (this.life <= 0) return;
+        
+        const data = this.behaviorData;
+        const age = 1 - (this.life / this.maxLife);
+        const time = Date.now() * 0.001;
+        
+        // 泡のメインボディ
+        const bubbleGradient = ctx.createRadialGradient(
+            this.x, this.y, 0,
+            this.x, this.y, this.size
+        );
+        
+        // 虹色効果の計算
+        const shimmer = Math.sin(time * 4 + age * Math.PI) * 0.3 + 0.7;
+        const baseAlpha = this.opacity * (this.life / this.maxLife);
+        
+        // 泡の外縁（薄い白色のリム）
+        bubbleGradient.addColorStop(0, 'transparent');
+        bubbleGradient.addColorStop(0.7, 'transparent');
+        bubbleGradient.addColorStop(0.85, this.color.replace(')', `, ${baseAlpha * 0.4 * shimmer})`).replace('hsl', 'hsla'));
+        bubbleGradient.addColorStop(0.95, `rgba(255, 255, 255, ${baseAlpha * 0.8 * shimmer})`);
+        bubbleGradient.addColorStop(1, `rgba(255, 255, 255, ${baseAlpha * 0.3})`);
+        
+        ctx.fillStyle = bubbleGradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // ハイライト（泡の上部に光沢）
+        const highlightSize = this.size * 0.3;
+        const highlightX = this.x - this.size * 0.2;
+        const highlightY = this.y - this.size * 0.2;
+        
+        const highlightGradient = ctx.createRadialGradient(
+            highlightX, highlightY, 0,
+            highlightX, highlightY, highlightSize
+        );
+        highlightGradient.addColorStop(0, `rgba(255, 255, 255, ${baseAlpha * 0.9 * shimmer})`);
+        highlightGradient.addColorStop(0.5, `rgba(255, 255, 255, ${baseAlpha * 0.4 * shimmer})`);
+        highlightGradient.addColorStop(1, 'transparent');
+        
+        ctx.fillStyle = highlightGradient;
+        ctx.beginPath();
+        ctx.arc(highlightX, highlightY, highlightSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 泡の影（下部に暗い部分）
+        if (this.size > 3) {
+            const shadowSize = this.size * 0.4;
+            const shadowX = this.x + this.size * 0.15;
+            const shadowY = this.y + this.size * 0.25;
+            
+            const shadowGradient = ctx.createRadialGradient(
+                shadowX, shadowY, 0,
+                shadowX, shadowY, shadowSize
+            );
+            shadowGradient.addColorStop(0, `rgba(100, 100, 150, ${baseAlpha * 0.3})`);
+            shadowGradient.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = shadowGradient;
+            ctx.beginPath();
+            ctx.arc(shadowX, shadowY, shadowSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    drawBubbleFragment(ctx) {
+        // 簡単な小さな点として描画
+        ctx.globalAlpha = this.opacity * (this.life / this.maxLife);
+        ctx.fillStyle = this.color;
+        
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
     isDead() {
         return this.life <= 0;
     }
@@ -375,7 +513,9 @@ export class AdvancedParticleSystem {
             'magnetic_field': this.createMagneticField.bind(this),
             'plasma_trail': this.createPlasmaTrail.bind(this),
             'energy_burst': this.createEnergyBurst.bind(this),
-            'wormhole': this.createWormholeEffect.bind(this)
+            'wormhole': this.createWormholeEffect.bind(this),
+            'gravitational_lensing_photons': this.createGravitationalLensingPhotons.bind(this),
+            'spacetime_bubbles': this.createSpacetimeBubbles.bind(this)
         };
         
         // 物理環境
@@ -462,6 +602,67 @@ export class AdvancedParticleSystem {
         }
         
         console.log(`🌊 重力波エフェクト生成: ${waveCount}波`);
+    }
+    
+    /**
+     * ブラックホール合体時の泡状パーティクルエフェクト生成
+     */
+    createSpacetimeBubbles(blackHoles, intensity = 1.0) {
+        if (!blackHoles || blackHoles.length === 0) return;
+        
+        blackHoles.forEach((bh, index) => {
+            const baseMass = Math.abs(bh.mass || 30);
+            const bubbleRegionRadius = Math.sqrt(baseMass) * 15;
+            const bubbleCount = Math.floor(80 * intensity * this.qualityLevel);
+            
+            // 各ブラックホール周辺に泡状パーティクルを生成
+            for (let i = 0; i < bubbleCount; i++) {
+                // 泡の初期位置（ブラックホール周辺のランダム分布）
+                const angle = Math.random() * Math.PI * 2;
+                const distance = bubbleRegionRadius * (0.3 + Math.random() * 0.7);
+                const x = bh.x + Math.cos(angle) * distance;
+                const y = bh.y + Math.sin(angle) * distance;
+                
+                // 泡のサイズ（大小さまざま）
+                const bubbleSize = 2 + Math.random() * 8;
+                const bubbleLifetime = 4 + Math.random() * 6;
+                
+                // 泡の色（青紫から白まで）
+                const hue = 240 + Math.random() * 60; // 青紫系
+                const saturation = 60 + Math.random() * 40;
+                const lightness = 50 + Math.random() * 40;
+                
+                const particle = new AdvancedParticle(x, y, {
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: (Math.random() - 0.5) * 20,
+                    life: bubbleLifetime,
+                    size: bubbleSize,
+                    color: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
+                    opacity: 0.7 + Math.random() * 0.3,
+                    type: 'spacetime_bubble',
+                    pulseSpeed: 0.5 + Math.random() * 1.0,
+                    maxTrailLength: 0, // 泡は軌跡を残さない
+                    behaviorData: {
+                        blackHoleX: bh.x,
+                        blackHoleY: bh.y,
+                        mass: baseMass,
+                        bubbleRadius: bubbleSize,
+                        maxBubbleRadius: bubbleSize * 3,
+                        expansionPhase: Math.random() * Math.PI * 2,
+                        expansionSpeed: 1.5 + Math.random() * 2.0,
+                        floatSpeed: 10 + Math.random() * 20,
+                        wobbleFrequency: 2 + Math.random() * 3,
+                        wobbleAmplitude: 5 + Math.random() * 10,
+                        iridescence: Math.random() * 0.5 + 0.5, // 虹色効果
+                        popProbability: 0.0001 + Math.random() * 0.0005 // 泡が弾ける確率
+                    }
+                });
+                
+                this.particles.push(particle);
+            }
+        });
+        
+        console.log(`🫧 時空の泡エフェクト生成: ${blackHoles.length}個のブラックホール周辺`);
     }
     
     /**
@@ -604,6 +805,131 @@ export class AdvancedParticleSystem {
         }
         
         console.log(`🌀 ワームホールエフェクト生成: ${particleCount}個`);
+    }
+    
+    /**
+     * 重力レンズ光子エフェクト生成
+     */
+    createGravitationalLensingPhotons(x, y, mass, intensity = 1.0) {
+        const particleCount = Math.floor(50 * intensity * this.qualityLevel);
+        
+        for (let i = 0; i < particleCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 100 + Math.random() * 100;
+            const speed = 80 + Math.random() * 40;
+            
+            // 光子の初期位置（ブラックホール周辺）
+            const startX = x + Math.cos(angle) * distance;
+            const startY = y + Math.sin(angle) * distance;
+            
+            // 光子の初期速度（ランダム方向）
+            const velocityAngle = Math.random() * Math.PI * 2;
+            
+            const particle = new AdvancedParticle(startX, startY, {
+                vx: Math.cos(velocityAngle) * speed,
+                vy: Math.sin(velocityAngle) * speed,
+                life: 3 + Math.random() * 2,
+                size: 1 + Math.random(),
+                color: '#ffffff',
+                type: 'lensing_photon',
+                maxTrailLength: 30,
+                behaviorData: {
+                    blackHoleX: x,
+                    blackHoleY: y,
+                    mass: mass,
+                    initialDistance: distance
+                }
+            });
+            
+            this.particles.push(particle);
+        }
+        
+        console.log(`💫 重力レンズ光子エフェクト生成: ${particleCount}個`);
+    }
+    
+    /**
+     * 時空の泡パーティクルの更新処理
+     */
+    updateSpacetimeBubble(deltaTime) {
+        const data = this.behaviorData;
+        const time = Date.now() * 0.001;
+        
+        // 泡の浮遊動作（水中の泡のように）
+        data.wobblePhase = (data.wobblePhase || 0) + data.wobbleFrequency * deltaTime;
+        const wobbleX = Math.sin(data.wobblePhase) * data.wobbleAmplitude * 0.1;
+        const wobbleY = Math.cos(data.wobblePhase * 1.3) * data.wobbleAmplitude * 0.1;
+        
+        // 泡の上昇動作（緩やかな上昇）
+        this.vy -= data.floatSpeed * deltaTime * 0.1;
+        
+        // 微細なランダム動作
+        this.vx += wobbleX * deltaTime;
+        this.vy += wobbleY * deltaTime;
+        
+        // 泡のサイズ変化（呼吸するような動き）
+        data.expansionPhase += data.expansionSpeed * deltaTime;
+        const sizeMultiplier = 1 + Math.sin(data.expansionPhase) * 0.3;
+        this.size = data.bubbleRadius * sizeMultiplier;
+        
+        // 虹色効果（泡の色が微細に変化）
+        if (data.iridescence > 0.5) {
+            const colorShift = Math.sin(time * 3 + data.expansionPhase) * 20;
+            const baseHue = 240 + colorShift;
+            const saturation = 60 + Math.sin(time * 2) * 20;
+            const lightness = 50 + Math.sin(time * 1.5) * 20;
+            this.color = `hsl(${baseHue}, ${saturation}%, ${lightness}%)`;
+        }
+        
+        // 泡が弾ける確率処理
+        if (Math.random() < data.popProbability) {
+            this.life = 0; // 泡が弾けた！
+            
+            // 弾けたときの小さな泡の破片を生成
+            this.createBubbleFragments();
+        }
+        
+        // ブラックホールから遠ざかると徐々に消失
+        const distanceToBlackHole = Math.sqrt(
+            (this.x - data.blackHoleX) ** 2 + (this.y - data.blackHoleY) ** 2
+        );
+        if (distanceToBlackHole > 300) {
+            this.life -= deltaTime * 2; // 速い消失
+        }
+        
+        // 透明度の調整
+        this.opacity = Math.min(this.opacity, this.life / this.maxLife);
+    }
+    
+    /**
+     * 泡が弾けたときの破片生成
+     */
+    createBubbleFragments() {
+        const fragmentCount = 3 + Math.floor(Math.random() * 5);
+        
+        for (let i = 0; i < fragmentCount; i++) {
+            const angle = (i / fragmentCount) * Math.PI * 2 + Math.random() * 0.5;
+            const speed = 15 + Math.random() * 25;
+            
+            const fragment = new AdvancedParticle(
+                this.x + (Math.random() - 0.5) * this.size,
+                this.y + (Math.random() - 0.5) * this.size,
+                {
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 0.5 + Math.random() * 1.0,
+                    size: this.size * (0.1 + Math.random() * 0.3),
+                    color: this.color,
+                    opacity: this.opacity * 0.8,
+                    type: 'bubble_fragment',
+                    decay: 0.1 + Math.random() * 0.1
+                }
+            );
+            
+            // フラグメントをシステムに追加（グローバル参照が必要）
+            if (window.particleSystem && window.particleSystem.advancedSystem) {
+                window.particleSystem.advancedSystem.particles.push(fragment);
+            }
+        }
     }
     
     /**

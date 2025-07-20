@@ -675,14 +675,15 @@ function setPreset(type) {
 
         switch (type) {
             case 'binary':
-                // ★ 修正：異なる恒星タイプの連星系
-                const mass1 = 35 + Math.random() * 30; // G/F型星（質量35-65）
-                const mass2 = 15 + Math.random() * 25; // K/M型星（質量15-40）
-                bodies.push(new Body(cx - 40, cy, 30, 30, mass1, particleSystem));
-                bodies.push(new Body(cx + 40, cy, -30, -30, mass2, particleSystem));
+                // ★ 軌道安定化：同一質量の連星系
+                const binaryMass = 30 + Math.random() * 40; // 質量30-70（統一）
+                bodies.push(new Body(cx - 40, cy, 30, 30, binaryMass, particleSystem));
+                bodies.push(new Body(cx + 40, cy, -30, -30, binaryMass, particleSystem));
                 break;
 
             case 'triangle':
+                // ★ 軌道安定化：同一質量の三角配置
+                const triangleMass = 25 + Math.random() * 35; // 質量25-60（統一）
                 const r = 120;
                 for (let i = 0; i < 3; i++) {
                     const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
@@ -690,18 +691,16 @@ function setPreset(type) {
                     const y = cy + r * Math.sin(angle);
                     const vx = -35 * Math.sin(angle);
                     const vy = 35 * Math.cos(angle);
-                    // ★ 修正：多様な恒星タイプ
-                    const mass = [25, 45, 70][i] + Math.random() * 15;
-                    bodies.push(new Body(x, y, vx, vy, mass, particleSystem));
+                    bodies.push(new Body(x, y, vx, vy, triangleMass, particleSystem));
                 }
                 break;
 
             case 'figure_eight':
-                // ★ 修正：8の字軌道も異なる恒星タイプで
-                const masses = [30, 50, 120].map(m => m + Math.random() * 20);
-                bodies.push(new Body(cx, cy, 25, 38, masses[0], particleSystem));
-                bodies.push(new Body(cx - 180, cy, -12.5, -19, masses[1], particleSystem));
-                bodies.push(new Body(cx + 180, cy, -12.5, -19, masses[2], particleSystem));
+                // ★ 軌道安定化：同一質量の8の字軌道
+                const figureEightMass = 40 + Math.random() * 50; // 質量40-90（統一）
+                bodies.push(new Body(cx, cy, 25, 38, figureEightMass, particleSystem));
+                bodies.push(new Body(cx - 180, cy, -12.5, -19, figureEightMass, particleSystem));
+                bodies.push(new Body(cx + 180, cy, -12.5, -19, figureEightMass, particleSystem));
                 break;
 
             case 'random':
@@ -1152,7 +1151,7 @@ function setupDeveloperMode() {
         { id: 'triggerPerfectAlignment', event: 'perfect_alignment', name: '完璧な整列' },
         { id: 'triggerBlackHoleMerger', event: 'black_hole_merger', name: 'ブラックホール合体' },
         { id: 'triggerResonanceHarmony', event: 'resonance_harmony', name: '共鳴ハーモニー' },
-        { id: 'triggerQuantumFluctuation', event: 'quantum_fluctuation', name: '量子ゆらぎ' }
+        { id: 'triggerMultiverse', event: 'multiverse', name: 'マルチバース現象' }
     ];
     
     eventButtons.forEach(({ id, event, name }) => {
@@ -1371,3 +1370,92 @@ function updatePerformanceStats() {
         </div>
     `;
 }
+
+// ★ 開発者モード用：グローバル関数を追加
+window.triggerMultiverse = function() {
+    console.log('🌌 開発者モード: マルチバース現象を強制発生');
+    specialEvents.triggerEvent('multiverse', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerQuantumFluctuation = function() {
+    console.warn('⚠️ 量子ゆらぎは削除されました。代わりに triggerMultiverse() を使用してください。');
+    return window.triggerMultiverse();
+};
+
+// ★ 既存の開発者コマンドも確保
+window.triggerCosmicStorm = function() {
+    console.log('⚡ 開発者モード: 宇宙嵐を強制発生');
+    specialEvents.triggerEvent('cosmic_storm', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerSolarFlare = function() {
+    console.log('☀️ 開発者モード: 太陽フレアを強制発生');
+    specialEvents.triggerEvent('solar_flare', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerHawkingRadiation = function() {
+    console.log('🌌 開発者モード: ホーキング輻射を強制発生');
+    specialEvents.triggerEvent('hawking_radiation', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerGravitationalLensing = function() {
+    console.log('🔬 開発者モード: 重力レンズ効果を強制発生');
+    specialEvents.triggerEvent('gravitational_lensing', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerPerfectAlignment = function() {
+    console.log('🌈 開発者モード: 完璧な整列を強制発生');
+    specialEvents.triggerEvent('perfect_alignment', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerBlackHoleMerger = function() {
+    console.log('💫 開発者モード: ブラックホール合体を強制発生');
+    specialEvents.triggerEvent('black_hole_merger', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+window.triggerResonanceHarmony = function() {
+    console.log('🎵 開発者モード: 共鳴ハーモニーを強制発生');
+    specialEvents.triggerEvent('resonance_harmony', bodies, particleSystem, ctx, canvas);
+    return true;
+};
+
+// ★ 開発者ヘルプ機能
+window.showEventHelp = function() {
+    console.log(`
+🌟 特殊イベント開発者コマンド一覧:
+
+基本イベント:
+• triggerCosmicStorm() - 宇宙嵐
+• triggerSolarFlare() - 太陽フレア
+
+レアイベント:
+• triggerHawkingRadiation() - ホーキング輻射
+• triggerGravitationalLensing() - 重力レンズ効果
+
+レジェンダリーイベント:
+• triggerPerfectAlignment() - 完璧な整列
+• triggerBlackHoleMerger() - ブラックホール合体
+• triggerResonanceHarmony() - 共鳴ハーモニー
+
+ウルトラレアイベント:
+• triggerMultiverse() - マルチバース現象 ⭐ NEW!
+
+その他:
+• showEventHelp() - このヘルプを表示
+• specialEvents.getEventStats() - イベント統計表示
+• specialEvents.getEventHistory() - イベント履歴表示
+
+例: triggerMultiverse()
+    `);
+    return true;
+};
+
+console.log('🎮 開発者モード: 特殊イベントコマンドが利用可能です');
+console.log('💡 showEventHelp() でコマンド一覧を確認できます');

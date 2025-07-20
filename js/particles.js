@@ -53,6 +53,9 @@ export class ParticleSystem {
         // 新しい高度なパーティクルシステム
         this.advancedSystem = new AdvancedParticleSystem();
         this.useAdvancedEffects = true;
+        
+        // ★ グローバル参照を設定（泡の破片生成用）
+        window.particleSystem = this;
     }
 
     /**
