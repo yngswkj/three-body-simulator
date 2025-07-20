@@ -384,9 +384,11 @@ export class AdvancedParticleSystem {
             magnetic: { x: 0, y: 0 }
         };
         
-        // パフォーマンス制御
-        this.maxParticles = 1000;
-        this.qualityLevel = 1.0;
+        // ★ パフォーマンス制御を強化
+        this.maxParticles = 500; // 更に制限を強化
+        this.qualityLevel = 0.7; // 品質を下げてパフォーマンス改善
+        this.performanceMode = false;
+        this.lastCleanup = Date.now();
     }
     
     /**
@@ -538,7 +540,9 @@ export class AdvancedParticleSystem {
      * エネルギーバーストエフェクト生成
      */
     createEnergyBurst(x, y, energy, intensity = 1.0) {
-        const particleCount = Math.floor(energy * 2 * intensity * this.qualityLevel);
+        // ★ 修正：パーティクル数を制限してパフォーマンスを改善
+        const baseParticleCount = Math.min(200, Math.max(20, Math.sqrt(energy) * 0.5));
+        const particleCount = Math.floor(baseParticleCount * intensity * this.qualityLevel);
         
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
@@ -560,7 +564,10 @@ export class AdvancedParticleSystem {
             this.particles.push(particle);
         }
         
-        console.log(`💥 エネルギーバースト生成: ${particleCount}個 (エネルギー: ${energy})`);
+        // ★ 修正：パフォーマンス向上のためログを簡略化
+        if (particleCount > 100) {
+            console.log(`💥 エネルギーバースト生成: ${particleCount}個 (制限済み、元エネルギー: ${energy.toFixed(0)})`);
+        }
     }
     
     /**
@@ -640,11 +647,22 @@ export class AdvancedParticleSystem {
      * パーティクル数制限
      */
     limitParticles() {
+        // ★ パフォーマンス最適化：積極的なパーティクル削減
         if (this.particles.length > this.maxParticles) {
-            // 古いパーティクルから削除
+            // 急速削減: ソートを省略して単純に先頭から削除
             const excessCount = this.particles.length - this.maxParticles;
-            this.particles.sort((a, b) => a.life - b.life);
-            this.particles.splice(0, excessCount);
+            this.particles.splice(0, excessCount * 2); // バッファを作って頑繁な削減を防止
+        }
+        
+        // ★ 定期的な全体クリーンアップ（メモリ管理）
+        const now = Date.now();
+        if (now - this.lastCleanup > 5000) { // 5秒ごと
+            this.particles = this.particles.filter(p => p.life > 0.1);
+            this.lastCleanup = now;
+            if (this.particles.length > this.maxParticles * 0.8) {
+                console.log('⚡ 緊急パーティクルクリーンアップ実行');
+                this.particles.splice(0, Math.floor(this.particles.length * 0.3));
+            }
         }
     }
     

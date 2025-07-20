@@ -140,6 +140,7 @@
                         <div class="section-title">開発者設定</div>
                         <div class="developer-controls">
                             <button class="trail-toggle" id="devModeToggle">開発者モード</button>
+                            <button class="trail-toggle" id="performanceStatsToggle">衝突統計</button>
                         </div>
                         <div class="special-events-panel" id="specialEventsPanel" style="display: none;">
                             <div class="special-events-title">特殊イベント発生</div>
@@ -152,6 +153,14 @@
                                 <button class="special-event-btn" id="triggerBlackHoleMerger">💫 BH合体</button>
                                 <button class="special-event-btn" id="triggerResonanceHarmony">🎵 共鳴ハーモニー</button>
                                 <button class="special-event-btn" id="triggerQuantumFluctuation">🌀 量子ゆらぎ</button>
+                            </div>
+                        </div>
+                        
+                        <!-- ★ パフォーマンス統計表示パネル -->
+                        <div class="performance-stats-panel" id="performanceStatsPanel" style="display: none;">
+                            <div class="performance-stats-title">⚡ 衝突検出パフォーマンス</div>
+                            <div class="performance-stats-content" id="performanceStatsContent">
+                                <!-- JavaScriptで動的に更新 -->
                             </div>
                         </div>
                     </div>

@@ -4,7 +4,11 @@ import { performanceMonitor } from './js/performance.js';
 import {
     calculateGravity,
     calculateEnergy,
-    handleCollisions as physicsHandleCollisions
+    handleCollisions as physicsHandleCollisions,
+    initializeOptimizedCollisionSystem,
+    updateCollisionSystemCanvas,
+    handleOptimizedCollisions,
+    getCollisionPerformanceStats
 } from './js/physics.js';
 import {
     initializeTooltip,
@@ -92,6 +96,8 @@ function resizeCanvas() {
             canvas.width = newWidth;
             canvas.height = newHeight;
             handleCanvasResize(canvas);
+            // ★ 最適化衝突システムのキャンバスサイズ更新
+            updateCollisionSystemCanvas(newWidth, newHeight);
         }
     } catch (error) {
         console.warn('Canvas resize error:', error);
@@ -101,7 +107,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// 物理計算のラッパー関数（強化版）
+// ★ 最適化された衝突処理のラッパー関数
 function handleCollisionsWrapper(validBodies) {
     const collisionCallback = (x, y, color1, color2, energy = 1) => {
         if (!particleSystem) return;
@@ -121,7 +127,8 @@ function handleCollisionsWrapper(validBodies) {
         }
     };
     
-    physicsHandleCollisions(validBodies, collisionSensitivity, collisionCallback, time);
+    // ★ 最適化された衝突処理を使用
+    return handleOptimizedCollisions(validBodies, collisionSensitivity, collisionCallback, time);
 }
 
 /**
@@ -321,6 +328,7 @@ function animate() {
         time += dt;
         updateDisplay();
         updateFPS();
+        updatePerformanceStats();
 
         // 定期的なメモリチェック
         if (Math.floor(time * 60) % 300 === 0) {
@@ -1032,6 +1040,9 @@ try {
 
     // 重力場キャンバスの初期化
     setupGravityFieldCanvas(canvas);
+    
+    // ★ 最適化された衝突検出システムの初期化
+    initializeOptimizedCollisionSystem(canvas.width, canvas.height);
 
     // ★ 追加：FPS表示の初期化
     const fpsElement = document.getElementById('fpsDisplay');
@@ -1083,6 +1094,8 @@ try {
 function setupDeveloperMode() {
     const devModeToggle = document.getElementById('devModeToggle');
     const specialEventsPanel = document.getElementById('specialEventsPanel');
+    const performanceStatsToggle = document.getElementById('performanceStatsToggle');
+    const performanceStatsPanel = document.getElementById('performanceStatsPanel');
     
     if (!devModeToggle || !specialEventsPanel) {
         console.warn('開発者モード要素が見つかりません');
@@ -1090,6 +1103,7 @@ function setupDeveloperMode() {
     }
     
     let developerMode = false;
+    let performanceStatsVisible = false;
     
     // 開発者モード切り替え
     devModeToggle.addEventListener('click', () => {
@@ -1107,6 +1121,27 @@ function setupDeveloperMode() {
             console.log('🛠️ 開発者モードを無効化しました');
         }
     });
+    
+    // パフォーマンス統計切り替え
+    if (performanceStatsToggle && performanceStatsPanel) {
+        performanceStatsToggle.addEventListener('click', () => {
+            performanceStatsVisible = !performanceStatsVisible;
+            
+            if (performanceStatsVisible) {
+                performanceStatsToggle.classList.add('active');
+                performanceStatsToggle.textContent = '衝突統計 ON';
+                performanceStatsPanel.style.display = 'block';
+                console.log('⚡ パフォーマンス統計表示を有効化しました');
+            } else {
+                performanceStatsToggle.classList.remove('active');
+                performanceStatsToggle.textContent = '衝突統計';
+                performanceStatsPanel.style.display = 'none';
+                console.log('⚡ パフォーマンス統計表示を無効化しました');
+            }
+        });
+    } else {
+        console.warn('パフォーマンス統計要素が見つかりません');
+    }
     
     // 特殊イベントトリガーボタンの設定
     const eventButtons = [
@@ -1250,4 +1285,89 @@ try {
     });
 } catch (error) {
     console.warn('パフォーマンスリセットイベントリスナー設定エラー:', error);
+}
+
+/**
+ * パフォーマンス統計の更新と表示
+ */
+function updatePerformanceStats() {
+    const performanceStatsPanel = document.getElementById('performanceStatsPanel');
+    const performanceStatsContent = document.getElementById('performanceStatsContent');
+    
+    if (!performanceStatsPanel || !performanceStatsContent) {
+        return;
+    }
+    
+    // 表示状態を確認
+    if (performanceStatsPanel.style.display === 'none') {
+        return;
+    }
+    
+    // 衝突検出パフォーマンス統計を取得
+    const collisionStats = getCollisionPerformanceStats();
+    
+    if (!collisionStats) {
+        performanceStatsContent.innerHTML = `
+            <div class="performance-stat">
+                <span class="stat-label">状態:</span>
+                <span class="stat-value">未初期化</span>
+            </div>
+            <div class="performance-stat">
+                <span class="stat-label">システム:</span>
+                <span class="stat-value">従来方式使用中</span>
+            </div>
+        `;
+        return;
+    }
+    
+    const { performance, spatialGrid, frameCount } = collisionStats;
+    
+    // 統計情報を更新
+    performanceStatsContent.innerHTML = `
+        <div class="performance-stat">
+            <span class="stat-label">処理時間 (平均):</span>
+            <span class="stat-value">${performance.averageProcessingTime.toFixed(3)}ms</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">処理時間 (ピーク):</span>
+            <span class="stat-value">${performance.peakProcessingTime.toFixed(3)}ms</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">総衝突数:</span>
+            <span class="stat-value">${performance.totalCollisions}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">ペアチェック数:</span>
+            <span class="stat-value">${performance.pairsChecked}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">スキップ数:</span>
+            <span class="stat-value">${performance.pairsSkipped}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">フレーム数:</span>
+            <span class="stat-value">${frameCount}</span>
+        </div>
+        <div class="performance-section-title">🌐 空間グリッド</div>
+        <div class="performance-stat">
+            <span class="stat-label">総セル数:</span>
+            <span class="stat-value">${spatialGrid.totalCells}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">使用セル数:</span>
+            <span class="stat-value">${spatialGrid.occupiedCells}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">セル内平均天体数:</span>
+            <span class="stat-value">${spatialGrid.averageBodiesPerCell.toFixed(1)}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">セル内最大天体数:</span>
+            <span class="stat-value">${spatialGrid.maxBodiesPerCell}</span>
+        </div>
+        <div class="performance-stat">
+            <span class="stat-label">キャッシュサイズ:</span>
+            <span class="stat-value">${spatialGrid.cacheSize}</span>
+        </div>
+    `;
 }

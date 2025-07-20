@@ -1,6 +1,7 @@
 'use strict';
 
 import { PHYSICS_CONSTANTS } from './constants.js';
+import { OptimizedCollisionDetector } from './spatial-partitioning.js';
 
 /**
  * 重力計算と位置更新
@@ -113,8 +114,22 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
 
                 // 運動量保存の法則で新しい速度を計算
                 const totalMass = survivor.mass + victim.mass;
-                const newVx = (survivor.mass * survivor.vx + victim.mass * victim.vx) / totalMass;
-                const newVy = (survivor.mass * survivor.vy + victim.mass * victim.vy) / totalMass;
+                let newVx = (survivor.mass * survivor.vx + victim.mass * victim.vx) / totalMass;
+                let newVy = (survivor.mass * survivor.vy + victim.mass * victim.vy) / totalMass;
+                
+                // ★ 追加：重い天体（惑星系以上）のエネルギー発散処理
+                const isHeavyBody = totalMass >= 100; // 惑星系以上の質量閾値
+                if (isHeavyBody) {
+                    // 質量比に応じたエネルギー発散係数
+                    const energyDissipationFactor = Math.min(0.8, 0.3 + (totalMass - 100) / 500);
+                    
+                    // 慣性減少：速度を大幅に減衰
+                    const inertiaLossFactor = 1 - energyDissipationFactor;
+                    newVx *= inertiaLossFactor;
+                    newVy *= inertiaLossFactor;
+                    
+                    console.log(`重い天体衝突: 質量${totalMass.toFixed(1)}, エネルギー発散率${(energyDissipationFactor*100).toFixed(1)}%`);
+                }
 
                 // 衝突による角運動量の計算
                 const relativeVx = victim.vx - survivor.vx;
@@ -136,6 +151,21 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
                 survivor.vy = newVy;
                 survivor.mass = Math.min(totalMass, 400);
                 survivor.trail = [];
+                
+                // ★ 修正：重い天体の追加エフェクトを簡略化（パフォーマンス改善）
+                if (isHeavyBody && createCollisionEffect && typeof createCollisionEffect === 'function') {
+                    try {
+                        // 1回だけ、エネルギーを制限した追加エフェクト
+                        createCollisionEffect(
+                            newX,
+                            newY,
+                            '#ff9500', '#ff6b6b',
+                            Math.min(totalEnergy * 0.1, 1000) // エネルギーを大幅制限
+                        );
+                    } catch (error) {
+                        console.warn('重い天体のエネルギー発散エフェクト生成エラー:', error);
+                    }
+                }
 
                 // 衝突エフェクト生成（安全性確保）
                 if (createCollisionEffect && typeof createCollisionEffect === 'function') {
@@ -201,4 +231,43 @@ export function calculateGravityFieldStrength(x, y, bodies, gravity) {
     }
 
     return totalFieldStrength;
+}
+
+// ★ 最適化された衝突検出システムのグローバルインスタンス
+let optimizedCollisionDetector = null;
+
+/**
+ * 最適化された衝突検出システムの初期化
+ */
+export function initializeOptimizedCollisionSystem(canvasWidth, canvasHeight) {
+    optimizedCollisionDetector = new OptimizedCollisionDetector(canvasWidth, canvasHeight);
+    console.log('⚡ 最適化衝突システム初期化完了');
+}
+
+/**
+ * キャンバスサイズ変更時の対応
+ */
+export function updateCollisionSystemCanvas(canvasWidth, canvasHeight) {
+    if (optimizedCollisionDetector) {
+        optimizedCollisionDetector.updateCanvasSize(canvasWidth, canvasHeight);
+    }
+}
+
+/**
+ * 最適化された衝突処理（外部から呼び出し用）
+ */
+export function handleOptimizedCollisions(bodies, collisionSensitivity, createCollisionEffect, time) {
+    if (!optimizedCollisionDetector) {
+        console.warn('最適化衝突システムが初期化されていません。従来の方式を使用します。');
+        return handleCollisions(bodies, collisionSensitivity, createCollisionEffect, time);
+    }
+    
+    return optimizedCollisionDetector.handleCollisions(bodies, collisionSensitivity, createCollisionEffect, time);
+}
+
+/**
+ * パフォーマンス統計の取得
+ */
+export function getCollisionPerformanceStats() {
+    return optimizedCollisionDetector ? optimizedCollisionDetector.getDebugInfo() : null;
 }

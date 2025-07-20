@@ -48,6 +48,7 @@ export class Particle {
 export class ParticleSystem {
     constructor() {
         this.particles = [];
+        this.maxParticles = 200; // ★ レガシーパーティクルの最大数を制限
         
         // 新しい高度なパーティクルシステム
         this.advancedSystem = new AdvancedParticleSystem();
@@ -58,6 +59,10 @@ export class ParticleSystem {
      * パーティクル追加
      */
     addParticle(particle) {
+        // ★ パーティクル数制限を実装
+        if (this.particles.length >= this.maxParticles) {
+            this.particles.shift(); // 古いパーティクルを削除
+        }
         this.particles.push(particle);
     }
 
@@ -71,8 +76,8 @@ export class ParticleSystem {
             return;
         }
         
-        // パーティクル数を調整（エネルギーに基づく）
-        const particleCount = Math.min(20, Math.max(5, Math.floor(energy / 10)));
+        // ★ パフォーマンス最適化：パーティクル数を大幅制限
+        const particleCount = Math.min(8, Math.max(3, Math.floor(Math.sqrt(energy) / 3)));
         
         // 多数のパーティクルを生成
         for (let i = 0; i < particleCount; i++) {
@@ -91,8 +96,8 @@ export class ParticleSystem {
             this.addParticle(particle);
         }
 
-        // 中心部の明るいフラッシュ
-        for (let i = 0; i < 5; i++) {
+        // ★ 中心部のフラッシュも減らす
+        for (let i = 0; i < 3; i++) {
             const particle = new Particle(x, y, '#ffffff');
             particle.vx = (Math.random() - 0.5) * 2;
             particle.vy = (Math.random() - 0.5) * 2;
