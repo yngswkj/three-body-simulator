@@ -97,6 +97,7 @@ export class Simulation {
             }
 
             // Background
+            // ★ 修正：背景描画時にコンテキストをリセットしない（drawBackground内で制御）
             drawBackground(this.ctx, this.canvas);
 
             // Performance monitoring
@@ -142,6 +143,8 @@ export class Simulation {
             this.dynamicBodyRenderer.update(this.config.TIME_STEP * 1000);
 
             // Render Bodies
+            // ★ 追加：天体描画前に加算合成をリセット（念のため）
+            this.ctx.globalCompositeOperation = 'source-over';
             this.renderBodies();
 
             // Special Events
@@ -156,7 +159,10 @@ export class Simulation {
 
             // Particle System Update
             if (this.particleSystem) {
+                // ★ 追加：パーティクル描画時は加算合成を有効化
+                this.ctx.globalCompositeOperation = 'lighter';
                 this.particleSystem.update(this.ctx);
+                this.ctx.globalCompositeOperation = 'source-over'; // 戻す
 
                 const baseMaxParticles = performanceMonitor.getMaxParticles();
                 const mobileMaxParticles = mobileOptimization.getParticleLimit();

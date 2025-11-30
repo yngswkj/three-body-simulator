@@ -14,6 +14,10 @@ export class BodyRenderer {
     draw(ctx, body, showTrails = true) {
         if (!body.isValid) return;
 
+        // ★ 全体を加算合成で描画して発光感を出す
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
         try {
             // 軌道描画
             if (showTrails && body.trail.length > 3) {
@@ -44,11 +48,16 @@ export class BodyRenderer {
 
         } catch (error) {
             console.warn('Body draw error:', error);
+        } finally {
+            ctx.restore();
         }
     }
 
     drawTrail(ctx, body) {
-        ctx.lineCap = 'round';
+        ctx.save();
+        // 加算合成で軌跡を光らせる
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'butt'; // roundだと重なり部分が光って節に見えるためbuttに変更
         ctx.lineJoin = 'round';
 
         for (let i = 2; i < body.trail.length - 1; i++) {
@@ -85,6 +94,8 @@ export class BodyRenderer {
             ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
             ctx.stroke();
         }
+
+        ctx.restore();
 
         if (body.trail.length > 0) {
             const lastPoint = body.trail[body.trail.length - 1];
@@ -469,6 +480,10 @@ export class BodyRenderer {
     }
 
     drawNormalBody(ctx, body) {
+        ctx.save();
+        // 加算合成で本体も光らせる
+        ctx.globalCompositeOperation = 'lighter';
+
         const baseRadius = Math.sqrt(body.mass) * 1.5;
         const pulseMultiplier = 1 + Math.sin(body.pulsePhase || 0) * 0.1;
         const radius = baseRadius * pulseMultiplier;
@@ -528,5 +543,7 @@ export class BodyRenderer {
         ctx.beginPath();
         ctx.arc(body.x - radius * 0.4, body.y - radius * 0.4, radius * 0.25, 0, Math.PI * 2);
         ctx.fill();
+
+        ctx.restore();
     }
 }
