@@ -2,6 +2,7 @@
 
 import { PHYSICS_CONSTANTS } from './constants.js';
 import { OptimizedCollisionDetector } from './spatial-partitioning.js';
+import { evolutionSystem } from './evolution-system.js';
 
 /**
  * 重力計算と位置更新
@@ -116,19 +117,19 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
                 const totalMass = survivor.mass + victim.mass;
                 let newVx = (survivor.mass * survivor.vx + victim.mass * victim.vx) / totalMass;
                 let newVy = (survivor.mass * survivor.vy + victim.mass * victim.vy) / totalMass;
-                
+
                 // ★ 追加：重い天体（惑星系以上）のエネルギー発散処理
                 const isHeavyBody = totalMass >= 100; // 惑星系以上の質量閾値
                 if (isHeavyBody) {
                     // 質量比に応じたエネルギー発散係数
                     const energyDissipationFactor = Math.min(0.8, 0.3 + (totalMass - 100) / 500);
-                    
+
                     // 慣性減少：速度を大幅に減衰
                     const inertiaLossFactor = 1 - energyDissipationFactor;
                     newVx *= inertiaLossFactor;
                     newVy *= inertiaLossFactor;
-                    
-                    console.log(`重い天体衝突: 質量${totalMass.toFixed(1)}, エネルギー発散率${(energyDissipationFactor*100).toFixed(1)}%`);
+
+                    console.log(`重い天体衝突: 質量${totalMass.toFixed(1)}, エネルギー発散率${(energyDissipationFactor * 100).toFixed(1)}%`);
                 }
 
                 // 衝突による角運動量の計算
@@ -151,7 +152,7 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
                 survivor.vy = newVy;
                 survivor.mass = Math.min(totalMass, 400);
                 survivor.trail = [];
-                
+
                 // ★ 修正：重い天体の追加エフェクトを簡略化（パフォーマンス改善）
                 if (isHeavyBody && createCollisionEffect && typeof createCollisionEffect === 'function') {
                     try {
@@ -185,7 +186,7 @@ export function handleCollisions(bodies, collisionSensitivity, createCollisionEf
 
                 // 衝突による進化処理
                 try {
-                    survivor.handleCollisionEvolution(impactSpeed, totalMass);
+                    evolutionSystem.handleCollisionEvolution(survivor, impactSpeed, totalMass);
                 } catch (error) {
                     console.warn('Collision evolution failed:', error);
                 }
@@ -261,7 +262,7 @@ export function handleOptimizedCollisions(bodies, collisionSensitivity, createCo
         console.warn('最適化衝突システムが初期化されていません。従来の方式を使用します。');
         return handleCollisions(bodies, collisionSensitivity, createCollisionEffect, time);
     }
-    
+
     return optimizedCollisionDetector.handleCollisions(bodies, collisionSensitivity, createCollisionEffect, time);
 }
 
