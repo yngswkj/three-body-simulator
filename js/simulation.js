@@ -29,17 +29,24 @@ export class Simulation {
         // Config
         this.config = { ...DEFAULT_CONFIG };
 
-        // Worker Initialization (Disabled for now due to sync issues)
-        // this.worker = new Worker('js/physics-worker.js', { type: 'module' });
-        // this.worker.onmessage = this.handleWorkerMessage.bind(this);
-        // this.isPhysicsProcessing = false;
+        // Worker Initialization
+        try {
+            this.worker = new Worker('js/physics-worker.js', { type: 'module' });
+            this.worker.onmessage = this.handleWorkerMessage.bind(this);
+            this.worker.onerror = (error) => {
+                console.error('Worker error:', error);
+                this.isPhysicsProcessing = false;
+            };
+            this.isPhysicsProcessing = false;
 
-        // if (this.worker) {
-        //     this.worker.postMessage({ 
-        //         type: 'init', 
-        //         payload: { width: canvas.width, height: canvas.height } 
-        //     });
-        // }
+            this.worker.postMessage({
+                type: 'init',
+                payload: { width: canvas.width, height: canvas.height }
+            });
+        } catch (e) {
+            console.error('Failed to initialize worker:', e);
+            this.worker = null;
+        }
 
         // Systems
         this.particleSystem = new ParticleSystem();
@@ -143,72 +150,62 @@ export class Simulation {
                 }
             });
 
-            // Physics (Main Thread)
+            // Physics (Web Worker)
             const dt = this.config.TIME_STEP * this.config.SPEED;
 
-            // Use Barnes-Hut algorithm for large number of bodies (threshold: 100)
-            if (this.bodies.length > 100) {
-                this.bodies = calculateGravityBarnesHut(
-                    this.bodies,
-                    this.config.GRAVITY,
-                    dt
-                );
-                if (this.config.ENABLE_COLLISIONS) {
-                    this.handleCollisionsWrapper(this.bodies);
+            if (this.worker) {
+                if (!this.isPhysicsProcessing) {
+                    this.isPhysicsProcessing = true;
+
+                    // Track IDs sent to worker to handle synchronization correctly
+                    this.sentBodyIds = new Set(this.bodies.map(b => b.id));
+
+                    // Prepare payload (strip circular deps)
+                    const bodiesPayload = this.bodies.map(b => ({
+                        id: b.id,
+                        x: b.x, y: b.y,
+                        vx: b.vx, vy: b.vy,
+                        mass: b.mass,
+                        type: b.type,
+                        isValid: b.isValid,
+                        isBlackHole: b.isBlackHole,
+                        eventHorizonRadius: b.eventHorizonRadius,
+                        // Essential properties for evolution system
+                        magneticField: b.magneticField,
+                        pulsarAge: b.pulsarAge,
+                        rotationPeriod: b.rotationPeriod,
+                        beamRotation: b.beamRotation,
+                        rotation: b.rotation,
+                        temperature: b.temperature,
+                        stellarClass: b.stellarClass,
+                        evolutionStage: b.evolutionStage,
+                        stellarAge: b.stellarAge,
+                        color: b.color
+                    }));
+
+                    this.worker.postMessage({
+                        type: 'step',
+                        payload: {
+                            bodies: bodiesPayload,
+                            gravity: this.config.GRAVITY,
+                            dt: dt,
+                            enableCollisions: this.config.ENABLE_COLLISIONS,
+                            collisionSensitivity: this.config.COLLISION_SENSITIVITY,
+                            time: this.time
+                        }
+                    });
                 }
             } else {
-                this.bodies = calculateGravity(
-                    this.bodies,
-                    this.config.GRAVITY,
-                    dt,
-                    this.config.ENABLE_COLLISIONS,
-                    this.handleCollisionsWrapper.bind(this)
-                );
-            }
-
-            /* Worker implementation disabled
-            if (!this.isPhysicsProcessing) {
-                this.isPhysicsProcessing = true;
-
-                // Track IDs sent to worker to handle synchronization correctly
-                this.sentBodyIds = new Set(this.bodies.map(b => b.id));
-
-                // Prepare payload (strip circular deps)
-                const bodiesPayload = this.bodies.map(b => ({
-                    id: b.id,
-                    x: b.x, y: b.y,
-                    vx: b.vx, vy: b.vy,
-                    mass: b.mass,
-                    type: b.type,
-                    isValid: b.isValid,
-                    isBlackHole: b.isBlackHole,
-                    eventHorizonRadius: b.eventHorizonRadius,
-                    // Essential properties for evolution system
-                    magneticField: b.magneticField,
-                    pulsarAge: b.pulsarAge,
-                    rotationPeriod: b.rotationPeriod,
-                    beamRotation: b.beamRotation,
-                    rotation: b.rotation,
-                    temperature: b.temperature,
-                    stellarClass: b.stellarClass,
-                    evolutionStage: b.evolutionStage,
-                    stellarAge: b.stellarAge,
-                    color: b.color
-                }));
-
-                this.worker.postMessage({
-                    type: 'step',
-                    payload: {
-                        bodies: bodiesPayload,
-                        gravity: this.config.GRAVITY,
-                        dt: dt,
-                        enableCollisions: this.config.ENABLE_COLLISIONS,
-                        collisionSensitivity: this.config.COLLISION_SENSITIVITY,
-                        time: this.time
+                // Fallback to main thread physics
+                if (this.bodies.length > 50) {
+                    calculateGravityBarnesHut(this.bodies, this.config.GRAVITY, dt);
+                    if (this.config.ENABLE_COLLISIONS) {
+                        this.handleCollisionsWrapper(this.bodies);
                     }
-                });
+                } else {
+                    calculateGravity(this.bodies, this.config.GRAVITY, dt, this.config.ENABLE_COLLISIONS, this.handleCollisionsWrapper.bind(this));
+                }
             }
-            */
 
             // Dynamic Body Renderer
             if (!this.dynamicBodyRenderer) {
@@ -381,7 +378,20 @@ export class Simulation {
         this.bodies = this.bodies.filter(body => {
             if (workerBodyMap.has(body.id)) {
                 // Update body properties from worker
-                Object.assign(body, workerBodyMap.get(body.id));
+                // ★ 修正：Object.assignを使用せず、物理演算結果のみを反映する
+                // これにより、メインスレッドで行われた天体進化（type変更など）が上書きされるのを防ぐ
+                const workerBody = workerBodyMap.get(body.id);
+                body.x = workerBody.x;
+                body.y = workerBody.y;
+                body.vx = workerBody.vx;
+                body.vy = workerBody.vy;
+                body.mass = workerBody.mass;
+
+                // 衝突関連のプロパティ更新
+                if (workerBody.isValid !== undefined) body.isValid = workerBody.isValid;
+                if (workerBody.lastCollisionTime !== undefined) body.lastCollisionTime = workerBody.lastCollisionTime;
+                if (workerBody.collisionImpactSpeed !== undefined) body.collisionImpactSpeed = workerBody.collisionImpactSpeed;
+
                 return true;
             } else {
                 // Body is missing from worker response.

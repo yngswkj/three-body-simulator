@@ -160,10 +160,14 @@ export class DynamicBodyRenderer {
      * コロナフィラメントの描画
      */
     renderCoronalFilaments(ctx, body, coronaRadius, activity) {
+        // パフォーマンス最適化：低品質時はスキップ
+        if (this.qualityLevel < 0.8) return;
+
         // 安全な値の確保
         const safeActivity = isFinite(activity) ? Math.max(0, Math.min(2, activity)) : 0.5;
         const safeCoronaRadius = isFinite(coronaRadius) && coronaRadius > 0 ? coronaRadius : 20;
-        const filamentCount = Math.floor(8 * safeActivity * this.qualityLevel);
+        // ★ 最適化：フィラメント数を削減
+        const filamentCount = Math.floor(4 * safeActivity * this.qualityLevel);
 
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
@@ -226,8 +230,12 @@ export class DynamicBodyRenderer {
      * 対流セルの描画
      */
     renderConvectionCells(ctx, body) {
+        // パフォーマンス最適化：低品質時はスキップ
+        if (this.qualityLevel < 0.8) return;
+
         const radius = body.radius || Math.sqrt(body.mass) * 1.5;
-        const cellCount = Math.floor(6 * this.qualityLevel);
+        // ★ 最適化：セル数を削減
+        const cellCount = Math.floor(3 * this.qualityLevel);
 
         ctx.save();
         ctx.globalAlpha = 0.3;
@@ -397,9 +405,9 @@ export class DynamicBodyRenderer {
      * 恒星風の可視化
      */
     renderStellarWind(ctx, body, activity) {
-        if (this.qualityLevel < 0.5) return; // 低品質時はスキップ
+        if (this.qualityLevel < 0.8) return; // ★ 最適化：閾値を上げる
 
-        const windParticles = Math.floor(20 * activity * this.qualityLevel);
+        const windParticles = Math.floor(10 * activity * this.qualityLevel); // ★ 最適化：粒子数を半減
         const radius = body.radius || Math.sqrt(body.mass) * 1.5;
 
         ctx.save();
@@ -1109,7 +1117,8 @@ export class DynamicBodyRenderer {
         const rotation = this.animationTime * 0.0008;
 
         // ガスの温度グラデーション
-        const layers = 8;
+        // ★ 最適化：レイヤー数を削減
+        const layers = this.qualityLevel > 0.8 ? 5 : 3;
         for (let i = 0; i < layers; i++) {
             const r = innerRadius + (outerRadius - innerRadius) * (i / layers);
             const nextR = innerRadius + (outerRadius - innerRadius) * ((i + 1) / layers);
@@ -1208,7 +1217,8 @@ export class DynamicBodyRenderer {
             ctx.fill();
 
             // ★ 微細なエネルギー粒子（よりかすか）
-            const particleCount = 3;
+            // ★ 最適化：粒子数を削減
+            const particleCount = this.qualityLevel > 0.8 ? 2 : 0;
             for (let p = 0; p < particleCount; p++) {
                 const particleProgress = (time * 0.8 + p * 0.6) % 1;
                 const particleX = center.x + Math.cos(direction) * jetLength * particleProgress;

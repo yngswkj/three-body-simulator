@@ -34,6 +34,13 @@ self.onmessage = function (e) {
                 updatedBodies = calculateGravity(bodies, gravity, dt, enableCollisions, handleCollisionsWrapper);
             }
 
+            // Update positions based on new velocities
+            // This is crucial because calculateGravity only updates velocities
+            updatedBodies.forEach(body => {
+                body.x += body.vx * dt;
+                body.y += body.vy * dt;
+            });
+
             self.postMessage({ bodies: updatedBodies, events });
         } catch (error) {
             console.error('Worker physics error:', error);
