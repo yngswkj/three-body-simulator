@@ -44,7 +44,7 @@ export function getBodyInfo(body, gravity, bodies) {
     return {
         type: body.getTypeNameJapanese(),
         mass: body.mass.toFixed(1),
-        speed: speed.toFixed(1),
+        speed: body.speed.toFixed(1),
         kineticEnergy: (kineticEnergy / 1000).toFixed(1),
         potentialEnergy: (potentialEnergy / 2000).toFixed(1),
         totalEnergy: totalEnergy.toFixed(1),
@@ -196,7 +196,7 @@ export function findBodyAt(x, y, bodies, isRunning = true) {
     // ★ 修正：停止中とモバイルでの当たり判定拡大
     const isMobile = window.innerWidth <= 767;
     let touchRadius = 1.5; // 基本値
-    
+
     if (!isRunning) {
         // 停止中は大きく拡大（ドラッグしやすく）
         touchRadius = isMobile ? 3.5 : 3.0;
@@ -204,7 +204,7 @@ export function findBodyAt(x, y, bodies, isRunning = true) {
         // 実行中のモバイルは適度に拡大
         touchRadius = 2.5;
     }
-    
+
     for (let body of bodies) {
         if (!body.isValid) continue;
         const dx = x - body.x;
@@ -313,12 +313,13 @@ export function showError(message) {
 /**
  * タッチ/マウス開始処理（射出システム対応）
  */
-export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay, drawBackground, isRunning, showError, Body, bodyLauncher = null) {
+export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay, drawBackground, isRunning, showError, Body, bodyLauncher = null, bodyRenderer = null) {
     try {
         e.preventDefault();
+        const ctx = canvas.getContext('2d');
 
         const rect = canvas.getBoundingClientRect();
-        
+
         // ★ 修正：タッチイベントの座標取得を強化
         let clientX, clientY;
         if (e.touches && e.touches.length > 0) {
@@ -328,7 +329,7 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
             clientX = e.clientX;
             clientY = e.clientY;
         }
-        
+
         const x = clientX - rect.left;
         const y = clientY - rect.top;
 
@@ -340,12 +341,12 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
                 // 停止中：射出システムを使用
                 const launchStarted = bodyLauncher.startLaunch(x, y, selectedBody);
                 console.log(`🎯 射出モード開始: ${selectedBody.getTypeNameJapanese()} (質量: ${selectedBody.mass.toFixed(1)})`);
-                
+
                 // uiStateも更新
                 uiState.selectedBody = selectedBody;
                 uiState.isLaunching = launchStarted;
                 uiState.isDragging = false;
-                
+
                 return {
                     selectedBody: selectedBody,
                     isLaunching: launchStarted,
@@ -357,7 +358,7 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
                 console.log(`🖱️ ドラッグモード開始: ${selectedBody.getTypeNameJapanese()} (質量: ${selectedBody.mass.toFixed(1)})`);
                 selectedBody.isDragging = true;
                 selectedBody.wasDragged = true; // ★ 追加：ドラッグ履歴を記録
-                
+
                 // ★ 追加：ドラッグ開始位置を記録
                 uiState.dragStartPos = { x: selectedBody.x, y: selectedBody.y };
 
@@ -380,14 +381,14 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
             //     console.log('📱 モバイルでの天体生成を防止しました');
             //     return {};
             // }
-            
+
             // ★ 修正：実行中でも天体作成を許可、パーティクルシステムを取得
             try {
                 const ctx = canvas.getContext('2d');
                 // ★ 修正：画面クリックでは恒星分類範囲のみ生成
                 const stellarRand = Math.random();
                 let newMass;
-                
+
                 if (stellarRand < 0.4) {
                     // 40%: M型星（質量10-25）
                     newMass = 10 + Math.random() * 15;
@@ -431,7 +432,12 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
                     drawBackground();
                     bodies.forEach(body => {
                         if (body.isValid) {
-                            body.draw(ctx, true);
+                            if (bodyRenderer) {
+                                bodyRenderer.draw(ctx, body, true);
+                            } else {
+                                // Fallback if bodyRenderer not provided (should not happen with updated simulator)
+                                // body.draw(ctx, true); // Removed from Body class
+                            }
                         }
                     });
                 }
@@ -454,7 +460,7 @@ export function handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
 /**
  * マウス移動処理（ドラッグ・射出対応）
  */
-export function handleMove(event, canvas, drawBackground, bodies, isRunning, bodyLauncher = null) {
+export function handleMove(event, canvas, drawBackground, bodies, isRunning, bodyLauncher = null, bodyRenderer = null) {
     event.preventDefault();
 
     // 座標の取得
@@ -476,13 +482,16 @@ export function handleMove(event, canvas, drawBackground, bodies, isRunning, bod
     if (bodyLauncher && bodyLauncher.isLaunching) {
         // 射出モード：射出システムで処理
         bodyLauncher.updateDrag(x, y);
-        
+
         // ★ 修正：停止中は即座に描画を更新（スマートフォン対応）
         if (!isRunning) {
             drawBackground();
+            const ctx = canvas.getContext('2d');
             bodies.forEach(body => {
                 if (body.isValid) {
-                    body.draw(canvas.getContext('2d'), true);
+                    if (bodyRenderer) {
+                        bodyRenderer.draw(ctx, body, true);
+                    }
                 }
             });
             bodyLauncher.render(bodies);
@@ -500,11 +509,26 @@ export function handleMove(event, canvas, drawBackground, bodies, isRunning, bod
     // ★ 修正：実行中でも画面を更新（軽量版）
     if (!isRunning) {
         drawBackground();
+        const ctx = canvas.getContext('2d');
         bodies.forEach(body => {
             if (body.isValid) {
-                body.draw(canvas.getContext('2d'), true);
+                if (bodyRenderer) {
+                    bodyRenderer.draw(ctx, body, true);
+                }
             }
         });
+
+        // 矢印エフェクト（ドラッグ中）
+        if (uiState.selectedBody.dragArrow) {
+            const arrow = uiState.selectedBody.dragArrow;
+            const ctx = canvas.getContext('2d');
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'red';
+            ctx.beginPath();
+            ctx.moveTo(arrow.startX, arrow.startY);
+            ctx.lineTo(arrow.endX, arrow.endY);
+            ctx.stroke();
+        }
     }
     // isRunning中は通常のアニメーションループで描画されるため、ここでは何もしない
 }
@@ -512,21 +536,21 @@ export function handleMove(event, canvas, drawBackground, bodies, isRunning, bod
 /**
  * マウス/タッチ終了処理（射出システム対応）
  */
-export function handleEnd(event, canvas, drawBackground, bodies, isRunning, bodyLauncher = null) {
+export function handleEnd(event, canvas, bodies, isRunning, drawBackground, bodyLauncher = null, bodyRenderer = null) {
     event.preventDefault();
 
-    // ★ 新機能：射出モードの処理
+    // ★ 新機能：射出モードの終了処理
     if (bodyLauncher && bodyLauncher.isLaunching) {
         const executed = bodyLauncher.executeLaunch();
         console.log(`🚀 射出${executed ? '実行' : 'キャンセル'}`);
-        
+
         // 射出が実行された場合、uiState もクリア
         if (executed) {
             uiState.isDragging = false;
             uiState.isLaunching = false;
             uiState.selectedBody = null;
         }
-        
+
         return {
             isDragging: false,
             isLaunching: false,
@@ -551,21 +575,21 @@ export function handleEnd(event, canvas, drawBackground, bodies, isRunning, body
             }
             const endX = clientX - rect.left;
             const endY = clientY - rect.top;
-            
+
             // ★ 修正：矢印情報を天体に保存（射出ベクトル方向に修正）
             const dx = uiState.dragStartPos.x - endX;
             const dy = uiState.dragStartPos.y - endY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
             if (distance > 20) { // 最小距離以上でのみ保存
                 // ★ 修正：進行方向（射出方向）に矢印を向ける
                 const arrowLength = Math.min(distance, 200); // 最大200pxに制限
                 const normalizedDx = -dx / distance; // 逆方向（進行方向）
                 const normalizedDy = -dy / distance; // 逆方向（進行方向）
-                
+
                 const arrowEndX = uiState.selectedBody.x + normalizedDx * arrowLength;
                 const arrowEndY = uiState.selectedBody.y + normalizedDy * arrowLength;
-                
+
                 uiState.selectedBody.dragArrow = {
                     startX: uiState.selectedBody.x,
                     startY: uiState.selectedBody.y,
@@ -577,10 +601,10 @@ export function handleEnd(event, canvas, drawBackground, bodies, isRunning, body
                 console.log(`矢印エフェクト保存: ${uiState.selectedBody.getTypeNameJapanese()} - 距離=${distance.toFixed(1)}`);
             }
         }
-        
+
         // ドラッグ終了時は速度をゼロにする（射出モードでは実行しない）
-        uiState.selectedBody.vx = 0;
-        uiState.selectedBody.vy = 0;
+        //         uiState.selectedBody.vx = 0;
+        //         uiState.selectedBody.vy = 0;
 
         // 軌跡をクリア（新しい位置から開始）
         uiState.selectedBody.trail = [];
@@ -602,9 +626,12 @@ export function handleEnd(event, canvas, drawBackground, bodies, isRunning, body
     // ★ 修正：実行中でなければ画面を更新
     if (!isRunning) {
         drawBackground();
+        const ctx = canvas.getContext('2d');
         bodies.forEach(body => {
             if (body.isValid) {
-                body.draw(canvas.getContext('2d'), true);
+                if (bodyRenderer) {
+                    bodyRenderer.draw(ctx, body, true);
+                }
             }
         });
     }
@@ -811,12 +838,12 @@ export function initializeWelcomeModal() {
     const helpButtonMobile = document.getElementById('helpButtonMobile');
     const helpPopup = document.getElementById('helpPopup');
     const helpOverlay = document.getElementById('helpOverlay');
-    
+
     // 初期表示でウェルカムモーダルを表示
     if (welcomeOverlay) {
         welcomeOverlay.style.display = 'flex';
     }
-    
+
     // ヘルプ表示関数
     const showHelp = () => {
         if (welcomeOverlay) {
@@ -827,7 +854,7 @@ export function initializeWelcomeModal() {
             helpOverlay.style.display = 'block';
         }
     };
-    
+
     // シミュレーション開始ボタン
     if (startButton) {
         startButton.addEventListener('click', () => {
@@ -836,21 +863,21 @@ export function initializeWelcomeModal() {
             }
         });
     }
-    
+
     // 詳細ヘルプボタン（ウェルカムモーダル内）
     if (helpButton) {
         helpButton.addEventListener('click', showHelp);
     }
-    
+
     // コントロールパネル内ヘルプボタン
     if (helpButtonControl) {
         helpButtonControl.addEventListener('click', showHelp);
     }
-    
+
     // モバイル用ヘルプボタン
     if (helpButtonMobile) {
         helpButtonMobile.addEventListener('click', showHelp);
     }
-    
+
     console.log('🎉 ウェルカムモーダル初期化完了');
 }

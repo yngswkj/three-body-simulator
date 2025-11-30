@@ -51,9 +51,9 @@ export function drawBackground(ctx, canvas) {
         cosmicBackground = new CosmicBackground(canvas, ctx);
         console.log('🌌 動的背景システム初期化完了');
     }
-    
+
     // 動的背景の更新と描画
-    const deltaTime = 16; // 約60FPS
+    const deltaTime = GRAPHICS_CONFIG.BACKGROUND_ANIMATION_DT;
     cosmicBackground.update(deltaTime);
     cosmicBackground.render();
 }
@@ -73,39 +73,7 @@ export function setupGravityLensCanvas(canvas) {
 /**
  * ★ 追加：アインシュタインリング描画
  */
-// ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
-// export function drawEinsteinRings(ctx, bodies) {
-//     // この関数は dynamic-bodies.js の renderBlackHole() で代替されました
-// }
-
-/**
- * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
- */
-// function drawGravityLensEffect(ctx, blackHole, bodies) {
-//     // この関数は dynamic-bodies.js の renderBlackHole() で代替されました
-// }
-
-/**
- * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
- */
-// function drawSimpleEinsteinRings(ctx, x, y, baseRadius, mass) {
-//     const time = Date.now() * 0.001;
-
-//     // 重複関数のため削除（dynamic-bodies.jsで代替）
-// }
-
-/**
- * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
- */
-// function drawSimpleEventHorizonBorder(ctx, x, y, radius) {
-//     // 重複関数のため削除
-// }
-
-/**
- * ★ 削除：重複描画関数（dynamic-bodies.jsで代替）
- */
-// ★ 削除：重複する降着円盤・ジェット描画関数群
-// これらの関数は dynamic-bodies.js で高品質版が実装済み
+// 重複描画関数は dynamic-bodies.js の renderBlackHole() で代替されました
 
 /**
  * 重力場キャンバス設定
@@ -129,7 +97,7 @@ export function calculateAndDrawGravityField(canvas, bodies, gravity, showGravit
     if (!showGravityField || bodies.length === 0) return null;
 
     gravityFieldUpdateCounter++;
-    if (gravityFieldUpdateCounter % 3 !== 0) return gravityFieldCanvas;
+    if (gravityFieldUpdateCounter % GRAPHICS_CONFIG.GRAVITY_FIELD_UPDATE_SKIP !== 0) return gravityFieldCanvas;
 
     const width = canvas.width;
     const height = canvas.height;
@@ -244,7 +212,7 @@ export function handleCanvasResize(canvas) {
     generateStars(canvas);
     setupGravityFieldCanvas(canvas);
     setupGravityLensCanvas(canvas);
-    
+
     // 新しい背景システムのリサイズ対応
     if (cosmicBackground) {
         cosmicBackground.handleResize(canvas.width, canvas.height);

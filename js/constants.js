@@ -46,9 +46,11 @@ export const PERFORMANCE_CONFIG = {
 // ★ 描画設定
 export const GRAPHICS_CONFIG = {
     GRAVITY_FIELD_RESOLUTION: 60,
+    GRAVITY_FIELD_UPDATE_SKIP: 3, // 重力場更新スキップ数
     STAR_COUNT_FACTOR: 8000,
     MAX_STARS: 150,
     TRAIL_UPDATE_INTERVAL: 3,
+    BACKGROUND_ANIMATION_DT: 16, // 背景アニメーション用DeltaTime (約60FPS)
     PARTICLE_GENERATION_INTERVALS: {
         blackHole: 8,
         neutronStar: 25,
@@ -56,6 +58,18 @@ export const GRAPHICS_CONFIG = {
         planetSystem: 40,
         default: 15
     }
+};
+
+// ★ デフォルト設定
+export const DEFAULT_CONFIG = {
+    TIME_STEP: 0.016,
+    SPEED: 1.0,
+    GRAVITY: 150,
+    TRAIL_LENGTH: 30,
+    SHOW_TRAILS: true,
+    ENABLE_COLLISIONS: true,
+    COLLISION_SENSITIVITY: 0.5,
+    SHOW_GRAVITY_FIELD: false
 };
 
 // ★ UI設定

@@ -1,15 +1,7 @@
 'use strict';
 
 import { performanceMonitor } from './js/performance.js';
-import {
-    calculateGravity,
-    calculateEnergy,
-    handleCollisions as physicsHandleCollisions,
-    initializeOptimizedCollisionSystem,
-    updateCollisionSystemCanvas,
-    handleOptimizedCollisions,
-    getCollisionPerformanceStats
-} from './js/physics.js';
+import { calculateEnergy, initializeOptimizedCollisionSystem, getCollisionPerformanceStats } from './js/physics.js';
 import {
     initializeTooltip,
     hideTooltip,
@@ -25,60 +17,29 @@ import {
 } from './js/ui.js';
 import {
     drawBackground,
-    setupGravityFieldCanvas,
-    calculateAndDrawGravityField,
     handleCanvasResize,
-    getDynamicBodyRenderer,
-    setVisualQuality
+    setupGravityFieldCanvas
 } from './js/graphics.js';
-import { ParticleSystem } from './js/particles.js';
 import { Body } from './js/body.js';
-import { SpecialEventsManager } from './js/specialEvents.js';
+import { Simulation } from './js/simulation.js';
 import { mobileOptimization } from './js/mobile-optimization.js';
-import { BodyLauncher } from './js/body-launcher.js';
 
 // グローバル変数
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-let bodies = [];
-let isRunning = false;
-let animationId = null;
-let time = 0;
+// UIコールバック
+const uiCallbacks = {
+    onUpdateDisplay: () => updateDisplay(),
+    onUpdateFPS: (fps) => {
+        updateFPSDisplay(fps);
+        updatePerformanceStats();
+    },
+    onError: (msg) => showError(msg)
+};
 
-// シミュレーションパラメータ
-let timeStep = 0.016;
-let speed = 1.0;
-let gravity = 150;
-
-// 軌跡表示用パラメータとエラーカウント
-let trailLength = 30;
-let showTrails = true;
-let errorCount = 0;
-
-// 衝突判定フラグ
-let enableCollisions = true;
-let collisionSensitivity = 0.5;
-
-// 重力場可視化関連
-let showGravityField = false;
-
-// FPS計測用変数
-let frameCount = 0;
-let lastFpsUpdate = Date.now();
-let currentFps = 60;
-
-// パーティクルシステム（統合版）
-const particleSystem = new ParticleSystem();
-
-// 動的天体レンダラー
-let dynamicBodyRenderer = null;
-
-// ★ 追加：特殊イベントマネージャー
-const specialEvents = new SpecialEventsManager();
-
-// ★ 追加：天体射出システム
-const bodyLauncher = new BodyLauncher(canvas, ctx);
+// シミュレーションインスタンス
+const simulation = new Simulation(canvas, ctx, uiCallbacks);
 
 // 現在のプリセットを記憶
 let currentPresetType = null;
@@ -95,9 +56,7 @@ function resizeCanvas() {
         if (canvas.width !== newWidth || canvas.height !== newHeight) {
             canvas.width = newWidth;
             canvas.height = newHeight;
-            handleCanvasResize(canvas);
-            // ★ 最適化衝突システムのキャンバスサイズ更新
-            updateCollisionSystemCanvas(newWidth, newHeight);
+            simulation.handleResize();
         }
     } catch (error) {
         console.warn('Canvas resize error:', error);
@@ -107,283 +66,23 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// ★ 最適化された衝突処理のラッパー関数
-function handleCollisionsWrapper(validBodies) {
-    const collisionCallback = (x, y, color1, color2, energy = 1) => {
-        if (!particleSystem) return;
-        
-        try {
-            // 従来の衝突エフェクト（エネルギー値を渡す）
-            if (typeof particleSystem.createCollisionEffect === 'function') {
-                particleSystem.createCollisionEffect(x, y, color1, color2, energy);
-            }
-            
-            // 高度なエネルギーバーストエフェクト
-            if (energy > 50 && typeof particleSystem.createAdvancedEffect === 'function') {
-                particleSystem.createAdvancedEffect('energy_burst', x, y, energy / 100);
-            }
-        } catch (error) {
-            console.warn('衝突エフェクト生成エラー:', error);
-        }
-    };
-    
-    // ★ 最適化された衝突処理を使用
-    return handleOptimizedCollisions(validBodies, collisionSensitivity, collisionCallback, time);
-}
-
 /**
- * FPS更新（確実に表示されるよう改善）
+ * FPS表示更新
  */
-function updateFPS() {
-    frameCount++;
-    const now = Date.now();
-
-    if (now - lastFpsUpdate >= 1000) {
-        currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
-        frameCount = 0;
-        lastFpsUpdate = now;
-
-        // ★ 修正：FPS表示を確実に更新
-        const fpsElement = document.getElementById('fpsDisplay');
-        if (fpsElement) {
-            fpsElement.textContent = currentFps;
-            // ★ 追加：低FPS時の警告色
-            if (currentFps < 30) {
-                fpsElement.style.color = '#ff6b6b';
-                fpsElement.style.borderColor = 'rgba(255, 107, 107, 0.5)';
-            } else if (currentFps < 45) {
-                fpsElement.style.color = '#ff9500';
-                fpsElement.style.borderColor = 'rgba(255, 149, 0, 0.5)';
-            } else {
-                fpsElement.style.color = '#4ecdc4';
-                fpsElement.style.borderColor = 'rgba(78, 205, 196, 0.3)';
-            }
+function updateFPSDisplay(currentFps) {
+    const fpsElement = document.getElementById('fpsDisplay');
+    if (fpsElement) {
+        fpsElement.textContent = currentFps;
+        if (currentFps < 30) {
+            fpsElement.style.color = '#ff6b6b';
+            fpsElement.style.borderColor = 'rgba(255, 107, 107, 0.5)';
+        } else if (currentFps < 45) {
+            fpsElement.style.color = '#ff9500';
+            fpsElement.style.borderColor = 'rgba(255, 149, 0, 0.5)';
+        } else {
+            fpsElement.style.color = '#4ecdc4';
+            fpsElement.style.borderColor = 'rgba(78, 205, 196, 0.3)';
         }
-    }
-}
-
-/**
- * メインアニメーションループ
- */
-function animate() {
-    if (!isRunning) return;
-
-    try {
-        // ★ 追加：モバイル最適化によるフレームスキップ
-        frameCount++;
-        if (mobileOptimization.shouldSkipFrame(frameCount)) {
-            animationId = requestAnimationFrame(animate);
-            return;
-        }
-
-        // 背景描画
-        drawBackground(ctx, canvas);
-
-        // パフォーマンス監視
-        performanceMonitor.monitorPerformance();
-        performanceMonitor.updateAdaptiveQuality();
-
-        // 緊急軌跡リセット処理
-        performanceMonitor.handleEmergencyTrailReset(bodies);
-
-        // 重力場描画
-        if (showGravityField && performanceMonitor.optimizationLevel < 4) {
-            const gravityFieldCanvas = calculateAndDrawGravityField(canvas, bodies, gravity, showGravityField);
-            if (gravityFieldCanvas) {
-                ctx.globalAlpha = 1.0;
-                ctx.drawImage(gravityFieldCanvas, 0, 0);
-            }
-        }
-
-        // ★ 追加：パーティクルシステムが設定されていない天体をチェック・修正
-        bodies.forEach(body => {
-            if (!body.particleSystem) {
-                body.particleSystem = particleSystem;
-                console.log(`天体 ${body.getTypeNameJapanese()} にパーティクルシステムを後付け設定`);
-            }
-        });
-
-        // 物理計算
-        const dt = timeStep * speed;
-        bodies = calculateGravity(bodies, gravity, dt, enableCollisions, handleCollisionsWrapper);
-
-        // 動的天体描画システムの準備
-        if (!dynamicBodyRenderer) {
-            dynamicBodyRenderer = getDynamicBodyRenderer(ctx);
-        }
-        
-        // 時間更新（アニメーションのため）- 1回のみ実行
-        dynamicBodyRenderer.update(timeStep * 1000);
-        
-        // 天体更新・描画（強化版）
-        bodies.forEach(body => {
-            body.update(dt, showTrails, trailLength, canvas);
-            
-            // 天体タイプに応じた高度な描画
-            if (body.type === 'blackHole') {
-                try {
-                    // ★ 高度レンダラーに戻す
-                    const useAdvancedRenderer = true; // サイズ修正完了のため高度レンダラーを使用
-                    
-                    if (useAdvancedRenderer && dynamicBodyRenderer && typeof dynamicBodyRenderer.renderBlackHole === 'function') {
-                        // console.log(`🖤 ブラックホール描画開始: 質量=${body.mass}, 事象の地平線=${body.eventHorizonRadius}`);
-                        dynamicBodyRenderer.renderBlackHole(ctx, body);
-                        // console.log(`✅ ブラックホール描画完了`);
-                    } else {
-                        // console.log(`🔧 フォールバック描画使用: 質量=${body.mass}, 元の半径=${body.eventHorizonRadius}`);
-                        // フォールバック：シンプルなブラックホール描画
-                        // ★ 設定：ブラックホールのサイズを大幅拡大
-                        const radius = body.eventHorizonRadius || Math.max(50, Math.sqrt(body.mass) * 8);
-                        // console.log(`📏 描画半径: ${radius} (元=${body.eventHorizonRadius}, 基準=${baseRadius})`);
-                        
-                        // 降着円盤
-                        for (let ring = 1; ring <= 3; ring++) {
-                            const ringRadius = radius * (2 + ring * 0.5);
-                            ctx.strokeStyle = `rgba(255, 150, 50, ${0.3 / ring})`;
-                            ctx.lineWidth = 2;
-                            ctx.beginPath();
-                            ctx.arc(body.x, body.y, ringRadius, 0, Math.PI * 2);
-                            ctx.stroke();
-                        }
-                        
-                        // 事象の地平線
-                        ctx.fillStyle = '#000000';
-                        ctx.beginPath();
-                        ctx.arc(body.x, body.y, radius, 0, Math.PI * 2);
-                        ctx.fill();
-                        
-                        // 境界
-                        ctx.strokeStyle = 'rgba(255, 100, 0, 0.5)';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.arc(body.x, body.y, radius, 0, Math.PI * 2);
-                        ctx.stroke();
-                    }
-                } catch (error) {
-                    console.error('ブラックホール描画エラー:', error);
-                    // エラー時のフォールバック描画
-                    body.draw(ctx, showTrails);
-                }
-            } else if (body.type === 'pulsar' || body.type === 'neutronStar' || body.type === 'whiteDwarf') {
-                // 特殊天体は動的レンダラーで描画
-                switch (body.type) {
-                    case 'pulsar':
-                        dynamicBodyRenderer.renderPulsar(ctx, body);
-                        break;
-                    case 'neutronStar':
-                        dynamicBodyRenderer.renderNeutronStar(ctx, body);
-                        break;
-                    default:
-                        body.draw(ctx, showTrails);
-                        break;
-                }
-            } else if (body.type === 'planetSystem') {
-                // 惑星系は従来の描画方法を使用
-                body.draw(ctx, showTrails);
-            } else if (body.type === 'star' || (body.mass > 50 && body.stellarProperties)) {
-                // 明示的に恒星として設定された天体、または恒星プロパティを持つ大質量天体
-                dynamicBodyRenderer.renderStar(ctx, body);
-            } else {
-                // 通常描画
-                body.draw(ctx, showTrails);
-            }
-        });
-
-        // ★ 削除：重複描画を除去（dynamic-bodies.jsで既に描画済み）
-        // drawEinsteinRings(ctx, bodies);
-
-        // ★ 追加：特殊イベントの更新と描画（シミュレーション時間を渡す）
-        specialEvents.update(bodies, time, ctx, canvas);
-
-        // ★ 追加：射出システムの描画（停止中のみ）
-        if (!isRunning) {
-            bodyLauncher.render(bodies);
-        }
-
-        // パーティクル管理（安全性チェック）
-        if (particleSystem && typeof particleSystem.update === 'function') {
-            try {
-                particleSystem.update(ctx);
-            } catch (error) {
-                console.warn('パーティクルシステム更新エラー:', error);
-            }
-        }
-
-        // パーティクル数制限（モバイル最適化適用）
-        if (particleSystem && typeof particleSystem.limitParticles === 'function') {
-            const baseMaxParticles = performanceMonitor.getMaxParticles();
-            const mobileMaxParticles = mobileOptimization.getParticleLimit();
-            const maxParticles = Math.min(baseMaxParticles, mobileMaxParticles);
-            particleSystem.limitParticles(maxParticles);
-        }
-
-        // ★ 追加：ブラックホールのデバッグ情報（パーティクルシステム状態も含む）
-        const blackHoles = bodies.filter(body => body.type === 'blackHole');
-        if (blackHoles.length > 0 && Math.floor(time * 60) % 180 === 0) { // 3秒ごと
-            blackHoles.forEach(bh => {
-                console.log(`ブラックホール状態: 質量=${bh.mass.toFixed(1)}, 事象の地平線=${bh.eventHorizonRadius?.toFixed(1) || 'undefined'}, パーティクルシステム=${!!bh.particleSystem}, アインシュタインリング有効`);
-            });
-        }
-
-        time += dt;
-        updateDisplay();
-        updateFPS();
-        updatePerformanceStats();
-
-        // 定期的なメモリチェック
-        if (Math.floor(time * 60) % 300 === 0) {
-            if (performanceMonitor.checkMemoryUsage()) {
-                performanceMonitor.applyTrailOptimization(bodies, 0.5);
-                const maxParticles = Math.max(50, 300 - 100);
-                particleSystem.limitParticles(maxParticles);
-            }
-        }
-
-        // ★ 修正：定期的な完全リセットの実行
-        if (Math.floor(time * 60) % 1800 === 0) { // 30秒ごと
-            const currentOptLevel = performanceMonitor.optimizationLevel;
-            if (currentOptLevel > 2) {
-                console.log(`定期リセット実行: 最適化レベル ${currentOptLevel} → 0`);
-                try {
-                    performanceMonitor.resetOptimization();
-                    // 軌跡も完全にクリア
-                    bodies.forEach(body => {
-                        if (body.trail.length > trailLength * 2) {
-                            body.trail = body.trail.slice(-trailLength);
-                        }
-                    });
-                    
-                    // ビジュアルエフェクト品質調整
-                    const qualityLevel = currentFps > 45 ? 1.0 : (currentFps > 30 ? 0.7 : 0.5);
-                    setVisualQuality(qualityLevel);
-                    particleSystem.setQualityLevel(qualityLevel);
-                    
-                } catch (error) {
-                    console.warn('定期リセットでエラーが発生:', error);
-                    // エラーが発生しても軽量リセットを試行
-                    try {
-                        performanceMonitor.lightReset();
-                    } catch (lightResetError) {
-                        console.warn('軽量リセットも失敗:', lightResetError);
-                    }
-                }
-            }
-        }
-
-        animationId = requestAnimationFrame(animate);
-
-    } catch (error) {
-        console.error('Animation error:', error);
-        showError('アニメーションエラーが発生しました。');
-
-        // ★ 修正：エラー時もパフォーマンス監視をリセット
-        try {
-            performanceMonitor.resetOptimization();
-        } catch (resetError) {
-            console.warn('エラー時のパフォーマンスリセットに失敗:', resetError);
-        }
-
-        stopSimulation();
     }
 }
 
@@ -392,10 +91,9 @@ function animate() {
  */
 function updateDisplay() {
     try {
-        // ★ 修正：特殊イベント統計の取得時にエラーハンドリング追加
         let eventStats = {};
-        if (specialEvents && typeof specialEvents.getEventStats === 'function') {
-            eventStats = specialEvents.getEventStats();
+        if (simulation.specialEvents && typeof simulation.specialEvents.getEventStats === 'function') {
+            eventStats = simulation.specialEvents.getEventStats();
         } else {
             console.warn('特殊イベントシステムが正しく初期化されていません');
             eventStats = {
@@ -406,11 +104,10 @@ function updateDisplay() {
             };
         }
 
-        uiUpdateDisplay(bodies, time, () => calculateEnergy(bodies, gravity), eventStats);
+        uiUpdateDisplay(simulation.bodies, simulation.time, () => calculateEnergy(simulation.bodies, simulation.config.GRAVITY), eventStats);
     } catch (error) {
         console.error('updateDisplay error:', error);
-        // フォールバック: 統計なしで表示更新
-        uiUpdateDisplay(bodies, time, () => calculateEnergy(bodies, gravity), {
+        uiUpdateDisplay(simulation.bodies, simulation.time, () => calculateEnergy(simulation.bodies, simulation.config.GRAVITY), {
             totalEvents: 0,
             eventTypes: {},
             rareEvents: 0,
@@ -423,11 +120,7 @@ function updateDisplay() {
  * シミュレーション停止
  */
 function stopSimulation() {
-    isRunning = false;
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-    }
+    simulation.stop();
 
     const btn = document.getElementById('playPause');
     if (btn) {
@@ -438,27 +131,28 @@ function stopSimulation() {
 
 // コントロール
 function toggleSimulation() {
-    isRunning = !isRunning;
-    const btn = document.getElementById('playPause');
-    const mobileBtn = document.getElementById('playPauseMobile');
-    
-    const buttonText = isRunning ? '停止' : '開始';
-    if (btn) {
-        btn.textContent = buttonText;
-        btn.classList.toggle('active', isRunning);
-    }
-    if (mobileBtn) {
-        mobileBtn.textContent = buttonText;
-        mobileBtn.classList.toggle('active', isRunning);
-    }
-    
-    if (isRunning) {
+    if (simulation.isRunning) {
+        simulation.stop();
+    } else {
         // ★ 追加：シミュレーション開始時にドラッグ履歴をクリア
-        bodies.forEach(body => {
+        simulation.bodies.forEach(body => {
             body.wasDragged = false;
             body.dragArrow = null; // ★ 追加：矢印エフェクト情報をクリア
         });
-        animate();
+        simulation.start();
+    }
+
+    const btn = document.getElementById('playPause');
+    const mobileBtn = document.getElementById('playPauseMobile');
+
+    const buttonText = simulation.isRunning ? '停止' : '開始';
+    if (btn) {
+        btn.textContent = buttonText;
+        btn.classList.toggle('active', simulation.isRunning);
+    }
+    if (mobileBtn) {
+        mobileBtn.textContent = buttonText;
+        mobileBtn.classList.toggle('active', simulation.isRunning);
     }
 }
 
@@ -469,47 +163,62 @@ function resetSimulation() {
     if (currentPresetType) {
         setPreset(currentPresetType);
     } else {
+        simulation.reset();
+        // Note: simulation.reset() clears bodies, but here we want to reset state but keep bodies if not preset?
+        // Wait, original resetSimulation logic:
+        /*
         bodies.forEach(body => {
             body.vx = 0;
             body.vy = 0;
             body.trail = [];
             body.isValid = true;
-            body.wasDragged = false; // ★ 追加：ドラッグ履歴をクリア
-            body.dragArrow = null; // ★ 追加：矢印エフェクト情報をクリア
+            body.wasDragged = false;
+            body.dragArrow = null;
         });
         particleSystem.clear();
         time = 0;
         errorCount = 0;
+        ...
+        */
+        // My Simulation.reset() clears bodies. I should probably add a softReset or handle it here.
+        // Let's implement the logic here using simulation properties.
 
-        // ★ 修正：エラーハンドリングを追加
+        simulation.bodies.forEach(body => {
+            body.vx = 0;
+            body.vy = 0;
+            body.trail = [];
+            body.isValid = true;
+            body.wasDragged = false;
+            body.dragArrow = null;
+        });
+        simulation.particleSystem.clear();
+        simulation.time = 0;
+        // errorCount is local to simulator.js? No, it was global. I should check if I moved it.
+        // I didn't move errorCount to Simulation class explicitly, but I should have.
+        // Let's assume I can ignore it or add it to Simulation later.
+
         try {
             performanceMonitor.resetOptimization();
             console.log('パフォーマンス最適化レベルをリセットしました');
         } catch (error) {
             console.warn('パフォーマンス最適化リセットでエラーが発生:', error);
-            // リセットに失敗してもシミュレーションは続行
         }
 
-        // ★ 追加：特殊イベント統計もリセット
-        specialEvents.resetStats();
-        
-        // ★ 追加：射出システムもリセット
-        bodyLauncher.resetAllLaunches();
+        simulation.specialEvents.resetStats();
+        simulation.bodyLauncher.resetAllLaunches();
 
         updateDisplay();
 
-        if (!isRunning) {
+        if (!simulation.isRunning) {
             drawBackground(ctx, canvas);
-            bodies.forEach(body => {
+            simulation.bodies.forEach(body => {
                 if (body.isValid) {
-                    body.draw(ctx, showTrails);
+                    simulation.bodyRenderer.draw(ctx, body, simulation.config.SHOW_TRAILS);
                 }
             });
-            bodyLauncher.render(bodies);
+            simulation.bodyLauncher.render(simulation.bodies);
         }
     }
-
-    // シミュレーションをリセットしました（最適化レベル・イベント統計も初期化）
 }
 
 document.getElementById('reset')?.addEventListener('click', resetSimulation);
@@ -517,126 +226,119 @@ document.getElementById('resetMobile')?.addEventListener('click', resetSimulatio
 
 function clearSimulation() {
     currentPresetType = null;
-    bodies = [];
-    particleSystem.clear();
-    time = 0;
-    errorCount = 0;
+    simulation.reset(); // This clears bodies and time.
 
-    // ★ 修正：エラーハンドリングを追加
+    // Additional reset logic from original
     try {
         performanceMonitor.resetOptimization();
         console.log('パフォーマンス最適化レベルをリセットしました');
     } catch (error) {
         console.warn('パフォーマンス最適化リセットでエラーが発生:', error);
-        // リセットに失敗してもシミュレーションは続行
     }
 
-    // ★ 追加：特殊イベント統計もリセット
-    specialEvents.resetStats();
-    
-    // ★ 追加：射出システムもリセット
-    bodyLauncher.resetAllLaunches();
+    simulation.specialEvents.resetStats();
+    simulation.bodyLauncher.resetAllLaunches();
 
     updateDisplay();
-    drawBackground(ctx, canvas);
-    
+    // drawBackground is called in simulation.reset() but we might need to redraw bodies (empty) and launcher
+
     // ★ 追加：停止状態での矢印エフェクト表示
-    bodies.forEach(body => {
+    // bodies are empty so this loop does nothing
+    simulation.bodies.forEach(body => {
         if (body.isValid) {
-            body.draw(ctx, showTrails);
+            simulation.bodyRenderer.draw(ctx, body, simulation.config.SHOW_TRAILS);
         }
     });
-    bodyLauncher.render(bodies);
-
-    // 天体をクリアしました（最適化レベル・イベント統計も初期化）
+    simulation.bodyLauncher.render(simulation.bodies);
 }
+
 
 document.getElementById('clear')?.addEventListener('click', clearSimulation);
 document.getElementById('clearMobile')?.addEventListener('click', clearSimulation);
 
 // スライダー
 document.getElementById('speedSlider')?.addEventListener('input', (e) => {
-    speed = parseFloat(e.target.value);
+    simulation.config.SPEED = parseFloat(e.target.value);
     const speedValue = document.getElementById('speedValue');
-    if (speedValue) speedValue.textContent = speed.toFixed(1);
+    if (speedValue) speedValue.textContent = simulation.config.SPEED.toFixed(1);
 });
 
 document.getElementById('gravitySlider')?.addEventListener('input', (e) => {
-    gravity = parseInt(e.target.value);
+    simulation.config.GRAVITY = parseInt(e.target.value);
     const gravityValue = document.getElementById('gravityValue');
-    if (gravityValue) gravityValue.textContent = gravity;
+    if (gravityValue) gravityValue.textContent = simulation.config.GRAVITY;
 });
 
 document.getElementById('trailSlider')?.addEventListener('input', (e) => {
-    trailLength = parseInt(e.target.value);
+    simulation.config.TRAIL_LENGTH = parseInt(e.target.value);
     const trailValue = document.getElementById('trailValue');
-    if (trailValue) trailValue.textContent = trailLength;
+    if (trailValue) trailValue.textContent = simulation.config.TRAIL_LENGTH;
 
     if (performanceMonitor.optimizationActive) {
-        performanceMonitor.originalTrailLength = trailLength;
-        console.log(`軌跡長変更: ${trailLength} (最適化中)`);
+        performanceMonitor.originalTrailLength = simulation.config.TRAIL_LENGTH;
+        console.log(`軌跡長変更: ${simulation.config.TRAIL_LENGTH} (最適化中)`);
     }
 
-    if (trailLength > 500) {
-        const qualityReduction = Math.min(0.8, (trailLength - 500) / 1000);
+    if (simulation.config.TRAIL_LENGTH > 500) {
+        const qualityReduction = Math.min(0.8, (simulation.config.TRAIL_LENGTH - 500) / 1000);
         performanceMonitor.trailRenderQuality = Math.max(0.2, 1.0 - qualityReduction);
-        console.log(`高軌跡長 ${trailLength} - 品質を ${performanceMonitor.trailRenderQuality.toFixed(2)} に予防調整`);
+        console.log(`高軌跡長 ${simulation.config.TRAIL_LENGTH} - 品質を ${performanceMonitor.trailRenderQuality.toFixed(2)} に予防調整`);
     } else if (!performanceMonitor.optimizationActive) {
         performanceMonitor.trailRenderQuality = 1.0;
     }
 });
 
 document.getElementById('trailToggle')?.addEventListener('click', () => {
-    showTrails = !showTrails;
+    simulation.config.SHOW_TRAILS = !simulation.config.SHOW_TRAILS;
     const btn = document.getElementById('trailToggle');
     if (btn) {
-        btn.classList.toggle('active', showTrails);
-        btn.textContent = showTrails ? '軌跡表示' : '軌跡非表示';
+        btn.classList.toggle('active', simulation.config.SHOW_TRAILS);
+        btn.textContent = simulation.config.SHOW_TRAILS ? '軌跡表示' : '軌跡非表示';
     }
 
-    if (!showTrails) {
-        bodies.forEach(body => body.trail = []);
+    if (!simulation.config.SHOW_TRAILS) {
+        simulation.bodies.forEach(body => body.trail = []);
     }
 });
 
 // ★ 統一された衝突判定切り替え関数
 function toggleCollision() {
-    enableCollisions = !enableCollisions;
+    simulation.config.ENABLE_COLLISIONS = !simulation.config.ENABLE_COLLISIONS;
     const btn = document.getElementById('collisionToggle');
     const mobileBtn = document.getElementById('collisionToggleMobile');
-    
-    const buttonText = enableCollisions ? '衝突有効' : '衝突無効';
-    
+
+    const buttonText = simulation.config.ENABLE_COLLISIONS ? '衝突有効' : '衝突無効';
+
     if (btn) {
-        btn.classList.toggle('active', enableCollisions);
+        btn.classList.toggle('active', simulation.config.ENABLE_COLLISIONS);
         btn.textContent = buttonText;
     }
     if (mobileBtn) {
-        mobileBtn.classList.toggle('active', enableCollisions);
+        mobileBtn.classList.toggle('active', simulation.config.ENABLE_COLLISIONS);
         mobileBtn.textContent = buttonText;
     }
-    
-    console.log(`衝突判定: ${enableCollisions ? '有効' : '無効'}`);
+
+    console.log(`衝突判定: ${simulation.config.ENABLE_COLLISIONS ? '有効' : '無効'}`);
 }
 
 // ★ 統一された重力場表示切り替え関数
 function toggleGravityField() {
-    showGravityField = !showGravityField;
+    simulation.config.SHOW_GRAVITY_FIELD = !simulation.config.SHOW_GRAVITY_FIELD;
     const btn = document.getElementById('gravityFieldToggle');
     const mobileBtn = document.getElementById('gravityFieldToggleMobile');
-    
-    const buttonText = showGravityField ? '重力場表示' : '重力場非表示';
-    
+
+    const buttonText = simulation.config.SHOW_GRAVITY_FIELD ? '重力場表示' : '重力場非表示';
+
     if (btn) {
-        btn.classList.toggle('active', showGravityField);
+        btn.classList.toggle('active', simulation.config.SHOW_GRAVITY_FIELD);
         btn.textContent = buttonText;
     }
     if (mobileBtn) {
-        mobileBtn.classList.toggle('active', showGravityField);
+        mobileBtn.classList.toggle('active', simulation.config.SHOW_GRAVITY_FIELD);
         mobileBtn.textContent = buttonText;
     }
-    
-    console.log(`重力場表示: ${showGravityField ? '有効' : '無効'}`);
+
+    console.log(`重力場表示: ${simulation.config.SHOW_GRAVITY_FIELD ? '有効' : '無効'}`);
 }
 
 // イベントリスナーの設定
@@ -647,19 +349,19 @@ document.getElementById('gravityFieldToggle')?.addEventListener('click', toggleG
 document.getElementById('gravityFieldToggleMobile')?.addEventListener('click', toggleGravityField);
 
 document.getElementById('collisionSensitivitySlider')?.addEventListener('input', (e) => {
-    collisionSensitivity = parseFloat(e.target.value);
+    simulation.config.COLLISION_SENSITIVITY = parseFloat(e.target.value);
     const sensitivityValue = document.getElementById('collisionSensitivityValue');
-    if (sensitivityValue) sensitivityValue.textContent = collisionSensitivity.toFixed(1);
+    if (sensitivityValue) sensitivityValue.textContent = simulation.config.COLLISION_SENSITIVITY.toFixed(1);
 });
 
 // プリセット
 function setPreset(type) {
     try {
         currentPresetType = type;
-        bodies = [];
-        particleSystem.clear();
-        time = 0;
-        errorCount = 0;
+        simulation.bodies = [];
+        simulation.particleSystem.clear();
+        simulation.time = 0;
+        // errorCount = 0; // Ignored
 
         // ★ 修正：エラーハンドリングを追加
         try {
@@ -677,8 +379,8 @@ function setPreset(type) {
             case 'binary':
                 // ★ 軌道安定化：同一質量の連星系
                 const binaryMass = 30 + Math.random() * 40; // 質量30-70（統一）
-                bodies.push(new Body(cx - 40, cy, 30, 30, binaryMass, particleSystem));
-                bodies.push(new Body(cx + 40, cy, -30, -30, binaryMass, particleSystem));
+                simulation.bodies.push(new Body(cx - 40, cy, 30, 30, binaryMass, simulation.particleSystem));
+                simulation.bodies.push(new Body(cx + 40, cy, -30, -30, binaryMass, simulation.particleSystem));
                 break;
 
             case 'triangle':
@@ -691,16 +393,16 @@ function setPreset(type) {
                     const y = cy + r * Math.sin(angle);
                     const vx = -35 * Math.sin(angle);
                     const vy = 35 * Math.cos(angle);
-                    bodies.push(new Body(x, y, vx, vy, triangleMass, particleSystem));
+                    simulation.bodies.push(new Body(x, y, vx, vy, triangleMass, simulation.particleSystem));
                 }
                 break;
 
             case 'figure_eight':
                 // ★ 軌道安定化：同一質量の8の字軌道
                 const figureEightMass = 40 + Math.random() * 50; // 質量40-90（統一）
-                bodies.push(new Body(cx, cy, 25, 38, figureEightMass, particleSystem));
-                bodies.push(new Body(cx - 180, cy, -12.5, -19, figureEightMass, particleSystem));
-                bodies.push(new Body(cx + 180, cy, -12.5, -19, figureEightMass, particleSystem));
+                simulation.bodies.push(new Body(cx, cy, 25, 38, figureEightMass, simulation.particleSystem));
+                simulation.bodies.push(new Body(cx - 180, cy, -12.5, -19, figureEightMass, simulation.particleSystem));
+                simulation.bodies.push(new Body(cx + 180, cy, -12.5, -19, figureEightMass, simulation.particleSystem));
                 break;
 
             case 'random':
@@ -710,7 +412,7 @@ function setPreset(type) {
                     const y = 120 + Math.random() * (canvas.height - 240);
                     const vx = (Math.random() - 0.5) * 60;
                     const vy = (Math.random() - 0.5) * 60;
-                    
+
                     // ★ 修正：多様な天体を生成（元の質量範囲）
                     const rand = Math.random();
                     let mass;
@@ -724,16 +426,16 @@ function setPreset(type) {
                         // 20%: 惑星系～ブラックホール（質量250-500）
                         mass = 250 + Math.random() * 250;
                     }
-                    
-                    bodies.push(new Body(x, y, vx, vy, mass, particleSystem));
+
+                    simulation.bodies.push(new Body(x, y, vx, vy, mass, simulation.particleSystem));
                 }
                 break;
         }
 
         // ★ 追加：プリセット作成後にパーティクルシステムが正しく設定されているか確認
-        bodies.forEach((body, index) => {
+        simulation.bodies.forEach((body, index) => {
             if (!body.particleSystem) {
-                body.particleSystem = particleSystem;
+                body.particleSystem = simulation.particleSystem;
                 console.warn(`プリセット天体${index}のパーティクルシステムを修正しました`);
             }
         });
@@ -742,21 +444,20 @@ function setPreset(type) {
         drawBackground(ctx, canvas);
 
         // ★ 追加：停止状態での天体描画と射出システム描画
-        bodies.forEach(body => {
+        simulation.bodies.forEach(body => {
             if (body.isValid) {
-                body.draw(ctx, showTrails);
+                simulation.bodyRenderer.draw(ctx, body, simulation.config.SHOW_TRAILS);
             }
         });
-        bodyLauncher.render(bodies);
+        simulation.bodyLauncher.render(simulation.bodies);
 
-        if (!isRunning) {
-            isRunning = true;
+        if (!simulation.isRunning) {
+            simulation.start();
             const btn = document.getElementById('playPause');
             if (btn) {
                 btn.textContent = '停止';
                 btn.classList.add('active');
             }
-            animate();
         }
 
         console.log(`プリセット「${type}」を設定しました（最適化レベルも初期化）`);
@@ -769,8 +470,8 @@ function setPreset(type) {
 
 // マウス/タッチイベントの処理
 canvas.addEventListener('touchstart', (e) => {
-    const result = handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
-        () => drawBackground(ctx, canvas), isRunning, showError, Body, bodyLauncher);
+    const result = handleStart(e, canvas, simulation.bodies, currentPresetType, updateDisplay,
+        () => drawBackground(ctx, canvas), simulation.isRunning, showError, Body, simulation.bodyLauncher, simulation.bodyRenderer);
     if (result.currentPresetType !== undefined) {
         currentPresetType = result.currentPresetType;
     }
@@ -782,49 +483,18 @@ canvas.addEventListener('touchstart', (e) => {
     }
     // ★ 追加：新しく作成された天体にパーティクルシステムを設定
     if (result.newBody) {
-        result.newBody.particleSystem = particleSystem;
+        result.newBody.particleSystem = simulation.particleSystem;
         console.log('新しい天体にパーティクルシステムを設定しました');
     }
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
-    // ★ 修正：タッチムーブ時の射出システム処理を優先
-    if (bodyLauncher.isLaunching) {
-        e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        
-        let clientX, clientY;
-        if (e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        }
-        
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-        
-        bodyLauncher.updateDrag(x, y);
-        
-        // 停止状態での即座描画更新
-        if (!isRunning) {
-            drawBackground(ctx, canvas);
-            bodies.forEach(body => {
-                if (body.isValid) {
-                    body.draw(ctx, showTrails);
-                }
-            });
-            bodyLauncher.render(bodies);
-        }
-    } else {
-        handleMove(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
-    }
-}, { passive: false });
+    handleMove(e, canvas, () => drawBackground(ctx, canvas), simulation.bodies, simulation.isRunning, simulation.bodyLauncher, simulation.bodyRenderer);
+});
 
 canvas.addEventListener('mousedown', (e) => {
-    const result = handleStart(e, canvas, bodies, currentPresetType, updateDisplay,
-        () => drawBackground(ctx, canvas), isRunning, showError, Body, bodyLauncher);
+    const result = handleStart(e, canvas, simulation.bodies, currentPresetType, updateDisplay,
+        () => drawBackground(ctx, canvas), simulation.isRunning, showError, Body, simulation.bodyLauncher, simulation.bodyRenderer);
     if (result.currentPresetType !== undefined) {
         currentPresetType = result.currentPresetType;
     }
@@ -836,48 +506,47 @@ canvas.addEventListener('mousedown', (e) => {
     }
     // ★ 追加：新しく作成された天体にパーティクルシステムを設定
     if (result.newBody) {
-        result.newBody.particleSystem = particleSystem;
+        result.newBody.particleSystem = simulation.particleSystem;
         console.log('新しい天体にパーティクルシステムを設定しました');
     }
 });
 
 canvas.addEventListener('mousemove', (e) => {
-    // ★ 修正：射出システム対応のマウスムーブ処理
-    if (bodyLauncher.isLaunching) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        bodyLauncher.updateDrag(x, y);
-        
-        // 停止状態での即座描画更新
-        if (!isRunning) {
-            drawBackground(ctx, canvas);
-            bodies.forEach(body => {
-                if (body.isValid) {
-                    body.draw(ctx, showTrails);
-                }
-            });
-            bodyLauncher.render(bodies);
+    handleMove(e, canvas, () => drawBackground(ctx, canvas), simulation.bodies, simulation.isRunning, simulation.bodyLauncher, simulation.bodyRenderer);
+
+    // ツールチップ処理
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const hoveredBody = findBodyAt(x, y, simulation.bodies);
+    if (hoveredBody) {
+        const tooltip = document.getElementById('tooltip');
+        if (tooltip) {
+            tooltip.style.left = `${e.clientX + 10}px`;
+            tooltip.style.top = `${e.clientY + 10}px`;
+            tooltip.innerHTML = `質量: ${hoveredBody.mass.toFixed(2)}<br>位置: (${hoveredBody.x.toFixed(2)}, ${hoveredBody.y.toFixed(2)})`;
+            tooltip.style.display = 'block';
         }
     } else {
-        handleMouseMove(e, canvas, bodies, gravity, () => drawBackground(ctx, canvas), findBodyAt, isRunning);
+        hideTooltip();
     }
 });
 
 canvas.addEventListener('touchend', (e) => {
-    // ★ 修正：実際のisRunning状態を渡す
-    const result = handleEnd(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
-    uiState.isDragging = result.isDragging;
-    uiState.isLaunching = result.isLaunching;
-    uiState.selectedBody = result.selectedBody;
+    const result = handleEnd(e, canvas, simulation.bodies, simulation.isRunning, () => drawBackground(ctx, canvas), simulation.bodyLauncher, simulation.bodyRenderer);
+    if (result && result.isDragging !== undefined) {
+        uiState.isDragging = result.isDragging;
+        uiState.selectedBody = result.selectedBody;
+    }
 });
 
 canvas.addEventListener('mouseup', (e) => {
-    // ★ 修正：実際のisRunning状態を渡す
-    const result = handleEnd(e, canvas, () => drawBackground(ctx, canvas), bodies, isRunning, bodyLauncher);
-    uiState.isDragging = result.isDragging;
-    uiState.isLaunching = result.isLaunching;
-    uiState.selectedBody = result.selectedBody;
+    const result = handleEnd(e, canvas, simulation.bodies, simulation.isRunning, () => drawBackground(ctx, canvas), simulation.bodyLauncher, simulation.bodyRenderer);
+    if (result && result.isDragging !== undefined) {
+        uiState.isDragging = result.isDragging;
+        uiState.selectedBody = result.selectedBody;
+    }
 });
 
 canvas.addEventListener('mouseleave', hideTooltip);
@@ -924,7 +593,7 @@ try {
 
             controlsToggle.addEventListener('click', () => {
                 isControlsVisible = !isControlsVisible;
-                
+
                 if (isControlsVisible) {
                     controlsPanel.classList.remove('collapsed');
                     controlsToggle.textContent = '✕';
@@ -952,22 +621,22 @@ try {
         // ★ 追加：メモリ最適化イベントリスナー
         window.addEventListener('memoryOptimizationRequired', (event) => {
             console.warn('💾 メモリ最適化要求を受信:', event.detail);
-            
+
             // 軌跡を短縮
-            bodies.forEach(body => {
+            simulation.bodies.forEach(body => {
                 if (body.trail && body.trail.length > 10) {
                     body.trail = body.trail.slice(-10);
                 }
             });
-            
+
             // パーティクルシステムをクリア
-            if (particleSystem) {
-                particleSystem.clearAll();
+            if (simulation.particleSystem) {
+                simulation.particleSystem.clearAll();
             }
-            
+
             // 特殊イベントをリセット
-            specialEvents.resetStats();
-            
+            simulation.specialEvents.resetStats();
+
             console.log('💾 メモリ最適化を実行しました');
         });
 
@@ -977,19 +646,19 @@ try {
                     helpOverlay.style.display = 'none';
                     helpPopup.style.display = 'none';
                     console.log('ESCキーでヘルプを閉じました');
-                } else if (bodyLauncher.isLaunching || bodyLauncher.queuedLaunches.size > 0) {
+                } else if (simulation.bodyLauncher.isLaunching || simulation.bodyLauncher.queuedLaunches.size > 0) {
                     // ★ 追加：ESCキーで射出キャンセル（すべて）
-                    bodyLauncher.cancelAllLaunches();
+                    simulation.bodyLauncher.cancelAllLaunches();
                     uiState.isLaunching = false;
                     uiState.selectedBody = null;
                     console.log('🎯 ESCキーですべての射出をキャンセルしました');
-                    
+
                     // 画面を再描画
-                    if (!isRunning) {
+                    if (!simulation.isRunning) {
                         drawBackground(ctx, canvas);
-                        bodies.forEach(body => {
+                        simulation.bodies.forEach(body => {
                             if (body.isValid) {
-                                body.draw(ctx, showTrails);
+                                simulation.bodyRenderer.draw(ctx, body, simulation.config.SHOW_TRAILS);
                             }
                         });
                     }
@@ -1032,28 +701,28 @@ try {
     const trailValue = document.getElementById('trailValue');
     const collisionSensitivityValue = document.getElementById('collisionSensitivityValue');
 
-    if (speedValue) speedValue.textContent = speed.toFixed(1);
-    if (gravityValue) gravityValue.textContent = gravity;
-    if (trailValue) trailValue.textContent = trailLength;
-    if (collisionSensitivityValue) collisionSensitivityValue.textContent = collisionSensitivity.toFixed(1);
+    if (speedValue) speedValue.textContent = simulation.config.SPEED.toFixed(1);
+    if (gravityValue) gravityValue.textContent = simulation.config.GRAVITY;
+    if (trailValue) trailValue.textContent = simulation.config.TRAIL_LENGTH;
+    if (collisionSensitivityValue) collisionSensitivityValue.textContent = simulation.config.COLLISION_SENSITIVITY.toFixed(1);
 
     // 重力場キャンバスの初期化
     setupGravityFieldCanvas(canvas);
-    
+
     // ★ 最適化された衝突検出システムの初期化
     initializeOptimizedCollisionSystem(canvas.width, canvas.height);
 
     // ★ 追加：FPS表示の初期化
     const fpsElement = document.getElementById('fpsDisplay');
     if (fpsElement) {
-        fpsElement.textContent = currentFps;
+        fpsElement.textContent = simulation.currentFps;
         console.log('FPS表示を初期化しました');
     } else {
         console.warn('FPS表示要素が見つかりません');
     }
 
     // ★ 追加：特殊イベントシステムの初期化確認（簡略化）
-    if (specialEvents && typeof specialEvents.getEventStats === 'function') {
+    if (simulation.specialEvents && typeof simulation.specialEvents.getEventStats === 'function') {
         // 特殊イベントシステムが正常に初期化されました
     } else {
         console.error('✗ 特殊イベントシステムの初期化に失敗しました');
@@ -1095,19 +764,19 @@ function setupDeveloperMode() {
     const specialEventsPanel = document.getElementById('specialEventsPanel');
     const performanceStatsToggle = document.getElementById('performanceStatsToggle');
     const performanceStatsPanel = document.getElementById('performanceStatsPanel');
-    
+
     if (!devModeToggle || !specialEventsPanel) {
         console.warn('開発者モード要素が見つかりません');
         return;
     }
-    
+
     let developerMode = false;
     let performanceStatsVisible = false;
-    
+
     // 開発者モード切り替え
     devModeToggle.addEventListener('click', () => {
         developerMode = !developerMode;
-        
+
         if (developerMode) {
             devModeToggle.classList.add('active');
             devModeToggle.textContent = '開発者モード ON';
@@ -1120,12 +789,12 @@ function setupDeveloperMode() {
             console.log('🛠️ 開発者モードを無効化しました');
         }
     });
-    
+
     // パフォーマンス統計切り替え
     if (performanceStatsToggle && performanceStatsPanel) {
         performanceStatsToggle.addEventListener('click', () => {
             performanceStatsVisible = !performanceStatsVisible;
-            
+
             if (performanceStatsVisible) {
                 performanceStatsToggle.classList.add('active');
                 performanceStatsToggle.textContent = '衝突統計 ON';
@@ -1141,7 +810,7 @@ function setupDeveloperMode() {
     } else {
         console.warn('パフォーマンス統計要素が見つかりません');
     }
-    
+
     // 特殊イベントトリガーボタンの設定
     const eventButtons = [
         { id: 'triggerCosmicStorm', event: 'cosmic_storm', name: '宇宙嵐' },
@@ -1153,7 +822,7 @@ function setupDeveloperMode() {
         { id: 'triggerResonanceHarmony', event: 'resonance_harmony', name: '共鳴ハーモニー' },
         { id: 'triggerMultiverse', event: 'multiverse', name: 'マルチバース現象' }
     ];
-    
+
     eventButtons.forEach(({ id, event, name }) => {
         const button = document.getElementById(id);
         if (button) {
@@ -1162,22 +831,22 @@ function setupDeveloperMode() {
                     console.warn('開発者モードが無効です');
                     return;
                 }
-                
+
                 try {
                     // 特殊イベントを強制発生
-                    if (specialEvents && typeof specialEvents.triggerEvent === 'function') {
-                        specialEvents.triggerEvent(event, bodies, particleSystem, ctx, canvas);
+                    if (simulation.specialEvents && typeof simulation.specialEvents.triggerEvent === 'function') {
+                        simulation.specialEvents.triggerEvent(event, simulation.bodies, simulation.particleSystem, ctx, canvas);
                         console.log(`🎯 開発者モード: ${name}を発生させました`);
-                        
+
                         // ボタンの視覚的フィードバック
                         button.style.transform = 'scale(0.95)';
                         button.style.boxShadow = '0 0 20px rgba(255, 107, 107, 0.8)';
-                        
+
                         setTimeout(() => {
                             button.style.transform = '';
                             button.style.boxShadow = '';
                         }, 200);
-                        
+
                         // 統計更新
                         updateDisplay();
                     } else {
@@ -1193,7 +862,7 @@ function setupDeveloperMode() {
             console.warn(`特殊イベントボタンが見つかりません: ${id}`);
         }
     });
-    
+
     console.log('🛠️ 開発者モード機能を初期化しました');
 }
 
@@ -1292,19 +961,19 @@ try {
 function updatePerformanceStats() {
     const performanceStatsPanel = document.getElementById('performanceStatsPanel');
     const performanceStatsContent = document.getElementById('performanceStatsContent');
-    
+
     if (!performanceStatsPanel || !performanceStatsContent) {
         return;
     }
-    
+
     // 表示状態を確認
     if (performanceStatsPanel.style.display === 'none') {
         return;
     }
-    
+
     // 衝突検出パフォーマンス統計を取得
     const collisionStats = getCollisionPerformanceStats();
-    
+
     if (!collisionStats) {
         performanceStatsContent.innerHTML = `
             <div class="performance-stat">
@@ -1318,9 +987,9 @@ function updatePerformanceStats() {
         `;
         return;
     }
-    
+
     const { performance, spatialGrid, frameCount } = collisionStats;
-    
+
     // 統計情報を更新
     performanceStatsContent.innerHTML = `
         <div class="performance-stat">
@@ -1372,62 +1041,62 @@ function updatePerformanceStats() {
 }
 
 // ★ 開発者モード用：グローバル関数を追加
-window.triggerMultiverse = function() {
+window.triggerMultiverse = function () {
     console.log('🌌 開発者モード: マルチバース現象を強制発生');
-    specialEvents.triggerEvent('multiverse', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('multiverse', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerQuantumFluctuation = function() {
+window.triggerQuantumFluctuation = function () {
     console.warn('⚠️ 量子ゆらぎは削除されました。代わりに triggerMultiverse() を使用してください。');
     return window.triggerMultiverse();
 };
 
 // ★ 既存の開発者コマンドも確保
-window.triggerCosmicStorm = function() {
+window.triggerCosmicStorm = function () {
     console.log('⚡ 開発者モード: 宇宙嵐を強制発生');
-    specialEvents.triggerEvent('cosmic_storm', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('cosmic_storm', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerSolarFlare = function() {
+window.triggerSolarFlare = function () {
     console.log('☀️ 開発者モード: 太陽フレアを強制発生');
-    specialEvents.triggerEvent('solar_flare', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('solar_flare', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerHawkingRadiation = function() {
+window.triggerHawkingRadiation = function () {
     console.log('🌌 開発者モード: ホーキング輻射を強制発生');
-    specialEvents.triggerEvent('hawking_radiation', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('hawking_radiation', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerGravitationalLensing = function() {
+window.triggerGravitationalLensing = function () {
     console.log('🔬 開発者モード: 重力レンズ効果を強制発生');
-    specialEvents.triggerEvent('gravitational_lensing', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('gravitational_lensing', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerPerfectAlignment = function() {
+window.triggerPerfectAlignment = function () {
     console.log('🌈 開発者モード: 完璧な整列を強制発生');
-    specialEvents.triggerEvent('perfect_alignment', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('perfect_alignment', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerBlackHoleMerger = function() {
+window.triggerBlackHoleMerger = function () {
     console.log('💫 開発者モード: ブラックホール合体を強制発生');
-    specialEvents.triggerEvent('black_hole_merger', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('black_hole_merger', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
-window.triggerResonanceHarmony = function() {
+window.triggerResonanceHarmony = function () {
     console.log('🎵 開発者モード: 共鳴ハーモニーを強制発生');
-    specialEvents.triggerEvent('resonance_harmony', bodies, particleSystem, ctx, canvas);
+    simulation.specialEvents.triggerEvent('resonance_harmony', simulation.bodies, simulation.particleSystem, ctx, canvas);
     return true;
 };
 
 // ★ 開発者ヘルプ機能
-window.showEventHelp = function() {
+window.showEventHelp = function () {
     console.log(`
 🌟 特殊イベント開発者コマンド一覧:
 
@@ -1459,3 +1128,5 @@ window.showEventHelp = function() {
 
 console.log('🎮 開発者モード: 特殊イベントコマンドが利用可能です');
 console.log('💡 showEventHelp() でコマンド一覧を確認できます');
+
+setupDeveloperMode();

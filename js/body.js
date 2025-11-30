@@ -39,7 +39,7 @@ export class Body {
         this.isBlackHole = this.type === 'blackHole';
         this.blackHoleRotation = 0;
         this.eventHorizonRadius = 0;
-        
+
         // ★ 追加：カー・ブラックホール
         this.kerrBlackHole = null;
 
@@ -59,11 +59,11 @@ export class Body {
 
         // ★ 追加：太陽黒点管理用プロパティ
         this.sunspots = [];
-        
+
         // ★ 追加：ドラッグ履歴とUI状態
         this.wasDragged = false;
         this.isDragging = false;
-        
+
         // ★ 追加：矢印エフェクト情報
         this.dragArrow = null; // {startX, startY, endX, endY, power}
         this.lastSunspotUpdate = 0;
@@ -72,10 +72,10 @@ export class Body {
 
         // ★ 改善：恒星分類を先に初期化
         this.initializeStellarClassification();
-        
+
         // 初期化完了
         this.initializeByType();
-        
+
         // ★ 追加：色が設定されていない場合のフォールバック
         if (!this.color) {
             this.color = this.generateColor();
@@ -168,22 +168,22 @@ export class Body {
     becomeBlackHole() {
         this.isBlackHole = true;
         this.color = '#000000';
-        
+
         // ★ 改善：カー・ブラックホールの初期化
         const spin = 0.2 + Math.random() * 0.7; // 0.2-0.9のランダムスピン
         this.kerrBlackHole = new KerrBlackHole(this.mass, spin);
-        
+
         // ★ 強制：ブラックホールのサイズを適切に調整（質量に比例）
         const visualRadius = Math.max(10, Math.sqrt(this.mass) * 1.6); // 質量100→半径16, 質量400→半径32
         this.eventHorizonRadius = visualRadius;
-        
+
         // ★ カー・ブラックホールの計算値も更新
         this.kerrBlackHole.eventHorizonRadius = visualRadius;
-        
+
         // ★ フラグでサイズ固定を管理
         this._blackHoleSizeFixed = true;
         this._fixedEventHorizonRadius = visualRadius;
-        
+
         console.log(`🌀 カー・ブラックホール誕生！質量: ${this.mass.toFixed(1)}, スピン: ${spin.toFixed(3)}`);
 
         this.createBlackHoleBirthEffect();
@@ -214,16 +214,16 @@ export class Body {
      */
     initializeStellarClassification() {
         console.log(`🔍 恒星分類チェック: タイプ=${this.type}, 質量=${this.mass}`);
-        
+
         // 通常星のみ恒星分類を適用（質量10-80未満の範囲）
         if (this.type === 'normal') {
             this.stellarClass = stellarClassifier.classifyByMass(this.mass);
-            
+
             if (this.stellarClass) {
                 // 恒星分類が成功した場合
                 this.evolutionStage = stellarClassifier.determineEvolutionStage(
-                    this.stellarClass, 
-                    this.stellarAge, 
+                    this.stellarClass,
+                    this.stellarAge,
                     this.stellarClass.solarMass
                 );
                 this.surfaceActivity = stellarClassifier.calculateSurfaceActivity(
@@ -231,13 +231,13 @@ export class Body {
                     this.evolutionStage,
                     this.stellarAge
                 );
-                
+
                 // 恒星分類に基づく色の更新
                 this.updateColorByStellarClass();
-                
+
                 // 温度の設定
                 this.temperature = this.stellarClass.data.temp / 5800; // 太陽温度で正規化
-                
+
                 console.log(`🌟 恒星分類適用: ${this.stellarClass.data.name} (${this.stellarClass.type}型) → 色: ${this.color}`);
             } else {
                 // 恒星分類範囲外（質量80以上の通常星）
@@ -256,13 +256,13 @@ export class Body {
             // 進化段階による温度補正
             const tempMult = this.evolutionStage.tempMult || 1.0;
             const adjustedTemp = this.stellarClass.data.temp * tempMult;
-            
+
             console.log(`🎨 色計算: ${this.stellarClass.type}型, 温度=${adjustedTemp}K`);
-            
+
             // 温度から色を計算
             const rgb = stellarClassifier.getColorFromTemperature(adjustedTemp);
             this.color = stellarClassifier.rgbToHex(rgb);
-            
+
             console.log(`🎨 色設定完了: RGB=${rgb} → HEX=${this.color}`);
         } else {
             console.log(`❌ 色更新失敗: stellarClass=${!!this.stellarClass}, evolutionStage=${!!this.evolutionStage}`);
@@ -409,11 +409,11 @@ export class Body {
         switch (this.type) {
             case 'blackHole':
                 this.blackHoleRotation += 0.02;
-                
+
                 // ★ ガード：サイズが固定されている場合は更新しない
                 if (!this._blackHoleSizeFixed) {
                     this.eventHorizonRadius = Math.sqrt(this.mass) * 1.5;
-                    
+
                     // ★ 追加：カー・ブラックホールの更新
                     if (this.kerrBlackHole) {
                         this.kerrBlackHole.update(dt);
@@ -422,7 +422,7 @@ export class Body {
                 } else {
                     // ★ 固定サイズを保持
                     this.eventHorizonRadius = this._fixedEventHorizonRadius;
-                    
+
                     // ★ カー・ブラックホールのアニメーションのみ更新
                     if (this.kerrBlackHole) {
                         this.kerrBlackHole.update(dt);
@@ -454,6 +454,10 @@ export class Body {
                 this.planets.forEach(planet => {
                     planet.angle += planet.speed * dt;
                 });
+
+                // 太陽黒点の更新
+                const radius = Math.sqrt(this.mass) * 1;
+                this.updateSunspots(radius);
                 break;
         }
     }
@@ -514,7 +518,7 @@ export class Body {
             const evolutionName = this.evolutionStage ? ` (${this.evolutionStage.name})` : '';
             return `${this.stellarClass.data.name}${baseName}${evolutionName}`;
         }
-        
+
         const typeNames = {
             'normal': '通常星',
             'whiteDwarf': '白色矮星',
@@ -621,479 +625,16 @@ export class Body {
     }
 
     /**
-     * 天体の描画（神秘的に改良）
+     * 天体の描画ロジックは BodyRenderer クラスに移動しました。
      */
-    draw(ctx, showTrails = true) {
-        if (!this.isValid) return;
 
-        try {
-            // ★ 修正：軌道描画をなめらかなベジェ曲線で改良
-            if (showTrails && this.trail.length > 3) {
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
 
-                // ★ 追加：なめらかなベジェ曲線による軌跡描画
-                for (let i = 2; i < this.trail.length - 1; i++) {
-                    const alpha = (i / this.trail.length) * 0.8;
-                    const width = (i / this.trail.length) * 4 + 0.5;
 
-                    // 制御点の計算（カトマル・ロム スプライン）
-                    const p0 = this.trail[i - 2];
-                    const p1 = this.trail[i - 1];
-                    const p2 = this.trail[i];
-                    const p3 = this.trail[i + 1] || this.trail[i];
 
-                    // ★ 追加：なめらかなグラデーション軌道
-                    const gradient = ctx.createLinearGradient(
-                        p1.x, p1.y, p2.x, p2.y
-                    );
 
-                    const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
-                    const prevAlphaHex = Math.floor(((i - 1) / this.trail.length) * 255).toString(16).padStart(2, '0');
 
-                    gradient.addColorStop(0, this.color + prevAlphaHex);
-                    gradient.addColorStop(1, this.color + alphaHex);
 
-                    ctx.strokeStyle = gradient;
-                    ctx.lineWidth = width;
 
-                    // ★ 追加：ベジェ曲線での描画
-                    ctx.beginPath();
-                    ctx.moveTo(p1.x, p1.y);
-
-                    // 制御点の計算（平滑化）
-                    const tension = 0.3; // 張力（0-1、低いほどなめらか）
-                    const cp1x = p1.x + (p2.x - p0.x) * tension;
-                    const cp1y = p1.y + (p2.y - p0.y) * tension;
-                    const cp2x = p2.x - (p3.x - p1.x) * tension;
-                    const cp2y = p2.y - (p3.y - p1.y) * tension;
-
-                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-                    ctx.stroke();
-                }
-
-                // ★ 追加：軌跡の終端に光る効果
-                if (this.trail.length > 0) {
-                    const lastPoint = this.trail[this.trail.length - 1];
-                    const glowRadius = 3;
-
-                    const glowGradient = ctx.createRadialGradient(
-                        lastPoint.x, lastPoint.y, 0,
-                        lastPoint.x, lastPoint.y, glowRadius
-                    );
-                    glowGradient.addColorStop(0, this.color + 'AA');
-                    glowGradient.addColorStop(0.5, this.color + '66');
-                    glowGradient.addColorStop(1, this.color + '00');
-
-                    ctx.fillStyle = glowGradient;
-                    ctx.beginPath();
-                    ctx.arc(lastPoint.x, lastPoint.y, glowRadius, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-
-            // ★ 変更：タイプ別描画
-            switch (this.type) {
-                case 'blackHole':
-                    // ★ 修正：ブラックホールはdynamicBodyRendererで描画するためスキップ
-                    break;
-                case 'neutronStar':
-                    this.drawNeutronStar(ctx);
-                    break;
-                case 'whiteDwarf':
-                    this.drawWhiteDwarf(ctx);
-                    break;
-                case 'pulsar':
-                    this.drawPulsar(ctx);
-                    break;
-                case 'planetSystem':
-                    this.drawPlanetSystem(ctx);
-                    break;
-                default:
-                    this.drawNormalBody(ctx);
-                    break;
-            }
-
-        } catch (error) {
-            console.warn('Body draw error:', error);
-        }
-    }
-
-    // ★ 追加：中性子星の描画
-    drawNeutronStar(ctx) {
-        const radius = Math.sqrt(this.mass) * 0.8; // 通常より小さい
-
-        // 強い磁場の可視化
-        for (let field = 0; field < 4; field++) {
-            const fieldAngle = this.rotation + (field * Math.PI / 2);
-            const fieldRadius = radius * (2 + field * 0.5);
-
-            ctx.strokeStyle = `rgba(147, 112, 219, ${0.3 - field * 0.05})`;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, fieldRadius, fieldAngle - 0.3, fieldAngle + 0.3);
-            ctx.stroke();
-        }
-
-        // 本体
-        const coreGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius);
-        coreGradient.addColorStop(0, '#FFFFFF');
-        coreGradient.addColorStop(0.3, '#E6E6FA');
-        coreGradient.addColorStop(0.7, '#9370DB');
-        coreGradient.addColorStop(1, '#4B0082');
-
-        ctx.fillStyle = coreGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // ★ 追加：白色矮星の描画
-    drawWhiteDwarf(ctx) {
-        const radius = Math.sqrt(this.mass) * 1.2;
-
-        // 温度による色変化
-        const tempFactor = this.temperature;
-        const r = Math.floor(255 * tempFactor);
-        const g = Math.floor(255 * tempFactor * 0.9);
-        const b = Math.floor(255 * (0.8 + tempFactor * 0.2));
-
-        // 冷却グラデーション
-        const coolGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius * 2);
-        coolGradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
-        coolGradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.7)`);
-        coolGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.1)`);
-
-        ctx.fillStyle = coolGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius * 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 本体
-        const coreGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius);
-        coreGradient.addColorStop(0, '#FFFFFF');
-        coreGradient.addColorStop(0.6, this.color);
-        coreGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.8)`);
-
-        ctx.fillStyle = coreGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // ★ 修正：パルサーの描画（より明確な視覚効果）
-    drawPulsar(ctx) {
-        const radius = Math.sqrt(this.mass) * 0.7; // ★ 修正：中性子星はより小さく
-
-        // ★ 修正：磁場強度に基づくビーム描画
-        const beamIntensity = Math.min(this.magneticField / 1.5, 1.0);
-
-        for (let beam = 0; beam < 2; beam++) {
-            const beamAngle = this.beamRotation + beam * Math.PI;
-            // ★ 修正：ビーム長は磁場強度と回転周期に依存
-            const beamLength = radius * (8 + this.magneticField * 4) * (0.1 / this.rotationPeriod);
-
-            const beamWidth = 2 + Math.sin(this.beamRotation * 12) * 1 * beamIntensity;
-
-            const beamGradient = ctx.createLinearGradient(
-                this.x, this.y,
-                this.x + Math.cos(beamAngle) * beamLength,
-                this.y + Math.sin(beamAngle) * beamLength
-            );
-
-            // ★ 修正：磁場強度によるビーム色の変化
-            const alpha = 0.7 * beamIntensity;
-            beamGradient.addColorStop(0, `rgba(0, 255, 255, ${alpha})`);
-            beamGradient.addColorStop(0.3, `rgba(0, 255, 255, ${alpha * 0.7})`);
-            beamGradient.addColorStop(0.7, `rgba(0, 255, 255, ${alpha * 0.4})`);
-            beamGradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-
-            ctx.strokeStyle = beamGradient;
-            ctx.lineWidth = beamWidth;
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(
-                this.x + Math.cos(beamAngle) * beamLength,
-                this.y + Math.sin(beamAngle) * beamLength
-            );
-            ctx.stroke();
-        }
-
-        // 本体（中性子星ベース）
-        this.drawNeutronStar(ctx);
-
-        // ★ 修正：パルサー特有のエフェクト（物理的に正確）
-        const pulseFrequency = 1.0 / this.rotationPeriod; // パルス周波数
-        const pulseIntensity = 0.5 + 0.5 * Math.sin(this.beamRotation * pulseFrequency) * beamIntensity;
-        const pulseRadius = radius * (1.5 + pulseIntensity * 0.8);
-
-        ctx.strokeStyle = `rgba(0, 255, 255, ${0.3 + pulseIntensity * 0.5})`;
-        ctx.lineWidth = 1 + pulseIntensity;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, pulseRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // ★ 追加：磁気圏の可視化
-        if (this.magneticField > 0.8) {
-            ctx.strokeStyle = `rgba(0, 255, 255, 0.2)`;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 3]);
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, radius * this.magneticField * 4, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-    }
-
-    // ★ 追加：惑星系の描画
-    drawPlanetSystem(ctx) {
-        // ★ 修正：恒星本体を太陽らしく描画
-        this.drawSolarStar(ctx);
-
-        // 惑星の描画
-        this.planets.forEach(planet => {
-            const px = this.x + Math.cos(planet.angle) * planet.distance;
-            const py = this.y + Math.sin(planet.angle) * planet.distance;
-
-            // 軌道線
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, planet.distance, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // 惑星
-            const planetGradient = ctx.createRadialGradient(px, py, 0, px, py, planet.size);
-            planetGradient.addColorStop(0, '#FFFFFF');
-            planetGradient.addColorStop(0.7, planet.color);
-            planetGradient.addColorStop(1, planet.color + '88');
-
-            ctx.fillStyle = planetGradient;
-            ctx.beginPath();
-            ctx.arc(px, py, planet.size, 0, Math.PI * 2);
-            ctx.fill();
-        });
-    }
-
-    // ★ 追加：太陽らしい恒星の描画
-    drawSolarStar(ctx) {
-        const baseRadius = Math.sqrt(this.mass) * 1;
-        const pulseMultiplier = 1 + Math.sin(this.pulsePhase) * 0.15; // 少し大きく脈動
-        const radius = baseRadius * pulseMultiplier;
-
-        // ★ 追加：太陽のコロナ効果（最外層）
-        for (let layer = 4; layer >= 1; layer--) {
-            const coronaRadius = radius * (3 + layer * 0.8);
-            const coronaGradient = ctx.createRadialGradient(this.x, this.y, radius, this.x, this.y, coronaRadius);
-
-            const intensity = 0.08 / layer;
-            const coronaAlpha = Math.floor(intensity * 255).toString(16).padStart(2, '0');
-
-            coronaGradient.addColorStop(0, '#FFD700' + coronaAlpha);
-            coronaGradient.addColorStop(0.3, '#FFA500' + Math.floor(intensity * 128).toString(16).padStart(2, '0'));
-            coronaGradient.addColorStop(0.7, '#FF6B47' + Math.floor(intensity * 64).toString(16).padStart(2, '0'));
-            coronaGradient.addColorStop(1, 'transparent');
-
-            ctx.fillStyle = coronaGradient;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, coronaRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // ★ 追加：太陽フレア効果（不規則な突起）
-        const flareCount = 8;
-        for (let i = 0; i < flareCount; i++) {
-            const flareAngle = (Math.PI * 2 * i) / flareCount + this.rotation * 0.1;
-            const flareLength = radius * (1.5 + Math.sin(this.pulsePhase + i) * 0.8);
-            const flareWidth = 3 + Math.sin(this.pulsePhase * 1.5 + i) * 2;
-
-            const flareGradient = ctx.createLinearGradient(
-                this.x, this.y,
-                this.x + Math.cos(flareAngle) * flareLength,
-                this.y + Math.sin(flareAngle) * flareLength
-            );
-
-            flareGradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
-            flareGradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.4)');
-            flareGradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
-
-            ctx.strokeStyle = flareGradient;
-            ctx.lineWidth = flareWidth;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(this.x + Math.cos(flareAngle) * radius * 0.8,
-                this.y + Math.sin(flareAngle) * radius * 0.8);
-            ctx.lineTo(this.x + Math.cos(flareAngle) * flareLength,
-                this.y + Math.sin(flareAngle) * flareLength);
-            ctx.stroke();
-        }
-
-        // ★ 修正：太陽の本体部分（多層グラデーション）
-        // 外側の彩層
-        const chromosphereGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius * 1.3);
-        chromosphereGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        chromosphereGradient.addColorStop(0.7, 'rgba(255, 140, 0, 0.6)');
-        chromosphereGradient.addColorStop(0.9, 'rgba(255, 69, 0, 0.8)');
-        chromosphereGradient.addColorStop(1, 'rgba(255, 0, 0, 0.9)');
-
-        ctx.fillStyle = chromosphereGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius * 1.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // メインの太陽表面（光球）
-        const photosphereGradient = ctx.createRadialGradient(
-            this.x - radius * 0.3, this.y - radius * 0.3, 0,
-            this.x, this.y, radius
-        );
-        photosphereGradient.addColorStop(0, '#FFFFFF');
-        photosphereGradient.addColorStop(0.1, '#FFFACD'); // レモンシフォン
-        photosphereGradient.addColorStop(0.3, '#FFD700'); // ゴールド
-        photosphereGradient.addColorStop(0.6, '#FFA500'); // オレンジ
-        photosphereGradient.addColorStop(0.8, '#FF8C00'); // ダークオレンジ
-        photosphereGradient.addColorStop(1, '#FF6347');   // トマト
-
-        ctx.fillStyle = photosphereGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // ★ 修正：太陽黒点の描画（低頻度更新）
-        this.updateSunspots(radius);
-        this.drawSunspots(ctx, radius);
-
-        // ★ 修正：太陽の表面テクスチャ（うずまく模様）
-        this.drawSolarSwirls(ctx, radius);
-
-        // ★ 追加：太陽の輪郭強調
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-
-    // ★ 追加：太陽のうずまく表面テクスチャ（最適化・ゆっくり対流）
-    drawSolarSwirls(ctx, radius) {
-        const timeOffset = this.pulsePhase * 0.02; // ★ 修正：時間変化をさらにゆっくりに
-
-        // ★ 修正：うずの数を固定化して変数削除
-        for (let i = 0; i < 5; i++) { // 5個固定
-            const centerAngle = (Math.PI * 2 * i) / 5 + timeOffset;
-            const centerDistance = radius * (0.3 + (i % 3) * 0.2); // ★ 修正：距離を固定パターンに
-            const centerX = this.x + Math.cos(centerAngle) * centerDistance;
-            const centerY = this.y + Math.sin(centerAngle) * centerDistance;
-
-            const swirlRadius = radius * 0.2; // ★ 修正：サイズを固定
-            const swirlIntensity = 0.4; // ★ 修正：強度を固定
-
-            // ★ 修正：回転方向を固定パターンに
-            const clockwise = (i % 2 === 0) ? 1 : -1;
-
-            // うずを構成する螺旋線を描画
-            for (let arm = 0; arm < 3; arm++) {
-                const armAngle = (Math.PI * 2 * arm) / 3;
-
-                ctx.strokeStyle = `rgba(255, 255, 100, ${0.2 + swirlIntensity * 0.2})`;
-                ctx.lineWidth = 1 + swirlIntensity * 0.5;
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-
-                // ★ 修正：螺旋の点数を削減
-                for (let p = 0; p < 12; p++) {
-                    const t = p / 12; // 0から1までの進行度
-                    const spiralDistance = swirlRadius * t;
-                    // ★ 修正：回転をよりゆっくりに
-                    const spiralAngle = armAngle + clockwise * t * Math.PI * 2 + timeOffset;
-
-                    const px = centerX + Math.cos(spiralAngle) * spiralDistance;
-                    const py = centerY + Math.sin(spiralAngle) * spiralDistance;
-
-                    if (p === 0) {
-                        ctx.moveTo(px, py);
-                    } else {
-                        ctx.lineTo(px, py);
-                    }
-                }
-
-                ctx.stroke();
-
-                // ★ 修正：うずの中心部（最初の腕のみ）
-                if (arm === 0) {
-                    const centerGradient = ctx.createRadialGradient(
-                        centerX, centerY, 0,
-                        centerX, centerY, swirlRadius * 0.25
-                    );
-                    centerGradient.addColorStop(0, `rgba(255, 255, 255, ${swirlIntensity * 0.6})`);
-                    centerGradient.addColorStop(0.5, `rgba(255, 220, 100, ${swirlIntensity * 0.3})`);
-                    centerGradient.addColorStop(1, 'transparent');
-
-                    ctx.fillStyle = centerGradient;
-                    ctx.beginPath();
-                    ctx.arc(centerX, centerY, swirlRadius * 0.25, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-
-            // ★ 修正：流れる効果（簡略化）
-            for (let flow = 0; flow < 6; flow++) {
-                const flowAngle = (Math.PI * 2 * flow) / 6 + timeOffset * 0.5; // ★ 修正：ゆっくりに
-                const flowDistance = swirlRadius * 0.8;
-                const flowLength = swirlRadius * 0.3;
-
-                const startX = centerX + Math.cos(flowAngle) * flowDistance;
-                const startY = centerY + Math.sin(flowAngle) * flowDistance;
-
-                const flowDirection = flowAngle + clockwise * Math.PI * 0.4;
-                const endX = startX + Math.cos(flowDirection) * flowLength;
-                const endY = startY + Math.sin(flowDirection) * flowLength;
-
-                ctx.strokeStyle = `rgba(255, 180, 0, ${swirlIntensity * 0.4})`;
-                ctx.lineWidth = 0.5;
-                ctx.beginPath();
-                ctx.moveTo(startX, startY);
-                ctx.lineTo(endX, endY);
-                ctx.stroke();
-            }
-        }
-
-        // ★ 修正：大きな対流セル（よりゆっくり・簡略化）
-        for (let cell = 0; cell < 2; cell++) { // ★ 修正：2個に削減
-            const cellAngle = (Math.PI * cell) + timeOffset * 0.1; // ★ 修正：さらにゆっくり
-            const cellDistance = radius * 0.5;
-            const cellX = this.x + Math.cos(cellAngle) * cellDistance;
-            const cellY = this.y + Math.sin(cellAngle) * cellDistance;
-            const cellSize = radius * 0.25; // ★ 修正：サイズを小さく
-
-            // 対流セルの境界線
-            ctx.strokeStyle = `rgba(255, 200, 0, 0.08)`;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([2, 4]); // ★ 修正：破線パターンを短く
-            ctx.beginPath();
-            ctx.arc(cellX, cellY, cellSize, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // ★ 修正：対流の流れ線（削減）
-            for (let f = 0; f < 4; f++) { // ★ 修正：4本に削減
-                const fAngle = (Math.PI * 2 * f) / 4 + timeOffset * 0.3; // ★ 修正：ゆっくり
-                const fRadius = cellSize * 0.6;
-                const fStartX = cellX + Math.cos(fAngle) * fRadius;
-                const fStartY = cellY + Math.sin(fAngle) * fRadius;
-
-                const flowLength = cellSize * 0.3;
-                const fEndX = fStartX + Math.cos(fAngle + Math.PI * 0.2) * flowLength;
-                const fEndY = fStartY + Math.sin(fAngle + Math.PI * 0.2) * flowLength;
-
-                ctx.strokeStyle = `rgba(255, 160, 0, 0.15)`;
-                ctx.lineWidth = 0.8;
-                ctx.beginPath();
-                ctx.moveTo(fStartX, fStartY);
-                ctx.lineTo(fEndX, fEndY);
-                ctx.stroke();
-            }
-        }
-    }
 
     // ★ 追加：太陽黒点の更新管理
     updateSunspots(radius) {
@@ -1132,108 +673,5 @@ export class Body {
         });
     }
 
-    // ★ 追加：太陽黒点の描画
-    drawSunspots(ctx, radius) {
-        this.sunspots.forEach(sunspot => {
-            const currentTime = Date.now();
-            const age = currentTime - sunspot.birthTime;
-            const normalizedAge = age / sunspot.lifespan;
 
-            // ★ 追加：黒点の年齢による透明度変化
-            let alpha = 1.0;
-            if (normalizedAge < 0.1) {
-                // フェードイン（最初の10%）
-                alpha = normalizedAge * 10;
-            } else if (normalizedAge > 0.8) {
-                // フェードアウト（最後の20%）
-                alpha = (1.0 - normalizedAge) * 5;
-            }
-
-            const spotX = this.x + Math.cos(sunspot.angle) * sunspot.distance;
-            const spotY = this.y + Math.sin(sunspot.angle) * sunspot.distance;
-
-            // 黒点の影
-            const sunspotGradient = ctx.createRadialGradient(spotX, spotY, 0, spotX, spotY, sunspot.size);
-            sunspotGradient.addColorStop(0, `rgba(50, 25, 0, ${0.9 * alpha})`);
-            sunspotGradient.addColorStop(0.6, `rgba(100, 50, 0, ${0.7 * alpha})`);
-            sunspotGradient.addColorStop(1, `rgba(255, 140, 0, ${0.3 * alpha})`);
-
-            ctx.fillStyle = sunspotGradient;
-            ctx.beginPath();
-            ctx.arc(spotX, spotY, sunspot.size, 0, Math.PI * 2);
-            ctx.fill();
-        });
-    }
-
-    // ★ 削除：重複描画関数を削除（dynamic-bodies.jsで高品質版を使用）
-    // drawBlackHole() は dynamic-bodies.js の renderBlackHole() で代替
-
-    // ★ 追加：通常天体描画（既存のdraw内容を移動）
-    drawNormalBody(ctx) {
-        // 天体描画
-        const baseRadius = Math.sqrt(this.mass) * 1.5;
-        const pulseMultiplier = 1 + Math.sin(this.pulsePhase) * 0.1;
-        const radius = baseRadius * pulseMultiplier;
-
-        // 外側のオーラ（複数層）
-        for (let layer = 3; layer >= 1; layer--) {
-            const auraRadius = radius * (2 + layer * 0.8);
-            const auraGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, auraRadius);
-            const intensity = 0.1 / layer;
-            auraGradient.addColorStop(0, this.color + Math.floor(intensity * 255).toString(16).padStart(2, '0'));
-            auraGradient.addColorStop(0.5, this.color + Math.floor(intensity * 128).toString(16).padStart(2, '0'));
-            auraGradient.addColorStop(1, 'transparent');
-
-            ctx.fillStyle = auraGradient;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, auraRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // メインの光輪
-        const glowGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius * 2);
-        glowGradient.addColorStop(0, this.color + 'AA');
-        glowGradient.addColorStop(0.6, this.color + '44');
-        glowGradient.addColorStop(1, 'transparent');
-        ctx.fillStyle = glowGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius * 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // コア部分（複数層のグラデーション）
-        const coreGradient = ctx.createRadialGradient(
-            this.x - radius * 0.3, this.y - radius * 0.3, 0,
-            this.x, this.y, radius
-        );
-        coreGradient.addColorStop(0, '#ffffff');
-        coreGradient.addColorStop(0.2, '#ffffff');
-        coreGradient.addColorStop(0.4, this.color);
-        coreGradient.addColorStop(0.7, this.color + 'CC');
-        coreGradient.addColorStop(1, this.color + '88');
-
-        ctx.fillStyle = coreGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 内側のエネルギーコア
-        const energyGradient = ctx.createRadialGradient(
-            this.x - radius * 0.2, this.y - radius * 0.2, 0,
-            this.x, this.y, radius * 0.6
-        );
-        energyGradient.addColorStop(0, '#ffffff');
-        energyGradient.addColorStop(0.5, this.color + 'DD');
-        energyGradient.addColorStop(1, 'transparent');
-
-        ctx.fillStyle = energyGradient;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius * 0.6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // スペキュラハイライト
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.beginPath();
-        ctx.arc(this.x - radius * 0.4, this.y - radius * 0.4, radius * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-    }
 }
