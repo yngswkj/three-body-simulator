@@ -5,6 +5,7 @@ import { BodyLauncher } from './body-launcher.js';
 import { BodyRenderer } from './body-renderer.js';
 import { performanceMonitor } from './performance.js';
 import { calculateGravity, handleOptimizedCollisions } from './physics.js';
+import { calculateGravityBarnesHut } from './barnes-hut.js';
 import { mobileOptimization } from './mobile-optimization.js';
 import {
     getDynamicBodyRenderer,
@@ -27,6 +28,18 @@ export class Simulation {
 
         // Config
         this.config = { ...DEFAULT_CONFIG };
+
+        // Worker Initialization (Disabled for now due to sync issues)
+        // this.worker = new Worker('js/physics-worker.js', { type: 'module' });
+        // this.worker.onmessage = this.handleWorkerMessage.bind(this);
+        // this.isPhysicsProcessing = false;
+
+        // if (this.worker) {
+        //     this.worker.postMessage({ 
+        //         type: 'init', 
+        //         payload: { width: canvas.width, height: canvas.height } 
+        //     });
+        // }
 
         // Systems
         this.particleSystem = new ParticleSystem();
@@ -81,8 +94,12 @@ export class Simulation {
 
     handleResize() {
         handleCanvasResize(this.canvas);
-        // Update collision system canvas size if needed (logic was in simulator.js)
-        // updateCollisionSystemCanvas(this.canvas.width, this.canvas.height); // Need to import this
+        // if (this.worker) {
+        //     this.worker.postMessage({
+        //         type: 'resize',
+        //         payload: { width: this.canvas.width, height: this.canvas.height }
+        //     });
+        // }
     }
 
     animate() {
@@ -126,15 +143,72 @@ export class Simulation {
                 }
             });
 
-            // Physics
+            // Physics (Main Thread)
             const dt = this.config.TIME_STEP * this.config.SPEED;
-            this.bodies = calculateGravity(
-                this.bodies,
-                this.config.GRAVITY,
-                dt,
-                this.config.ENABLE_COLLISIONS,
-                this.handleCollisionsWrapper.bind(this)
-            );
+
+            // Use Barnes-Hut algorithm for large number of bodies (threshold: 100)
+            if (this.bodies.length > 100) {
+                this.bodies = calculateGravityBarnesHut(
+                    this.bodies,
+                    this.config.GRAVITY,
+                    dt
+                );
+                if (this.config.ENABLE_COLLISIONS) {
+                    this.handleCollisionsWrapper(this.bodies);
+                }
+            } else {
+                this.bodies = calculateGravity(
+                    this.bodies,
+                    this.config.GRAVITY,
+                    dt,
+                    this.config.ENABLE_COLLISIONS,
+                    this.handleCollisionsWrapper.bind(this)
+                );
+            }
+
+            /* Worker implementation disabled
+            if (!this.isPhysicsProcessing) {
+                this.isPhysicsProcessing = true;
+
+                // Track IDs sent to worker to handle synchronization correctly
+                this.sentBodyIds = new Set(this.bodies.map(b => b.id));
+
+                // Prepare payload (strip circular deps)
+                const bodiesPayload = this.bodies.map(b => ({
+                    id: b.id,
+                    x: b.x, y: b.y,
+                    vx: b.vx, vy: b.vy,
+                    mass: b.mass,
+                    type: b.type,
+                    isValid: b.isValid,
+                    isBlackHole: b.isBlackHole,
+                    eventHorizonRadius: b.eventHorizonRadius,
+                    // Essential properties for evolution system
+                    magneticField: b.magneticField,
+                    pulsarAge: b.pulsarAge,
+                    rotationPeriod: b.rotationPeriod,
+                    beamRotation: b.beamRotation,
+                    rotation: b.rotation,
+                    temperature: b.temperature,
+                    stellarClass: b.stellarClass,
+                    evolutionStage: b.evolutionStage,
+                    stellarAge: b.stellarAge,
+                    color: b.color
+                }));
+
+                this.worker.postMessage({
+                    type: 'step',
+                    payload: {
+                        bodies: bodiesPayload,
+                        gravity: this.config.GRAVITY,
+                        dt: dt,
+                        enableCollisions: this.config.ENABLE_COLLISIONS,
+                        collisionSensitivity: this.config.COLLISION_SENSITIVITY,
+                        time: this.time
+                    }
+                });
+            }
+            */
 
             // Dynamic Body Renderer
             if (!this.dynamicBodyRenderer) {
@@ -197,25 +271,6 @@ export class Simulation {
 
             this.stop();
         }
-    }
-
-    handleCollisionsWrapper(validBodies) {
-        const collisionCallback = (x, y, color1, color2, energy = 1) => {
-            if (!this.particleSystem) return;
-
-            try {
-                if (typeof this.particleSystem.createCollisionEffect === 'function') {
-                    this.particleSystem.createCollisionEffect(x, y, color1, color2, energy);
-                }
-                if (energy > 50 && typeof this.particleSystem.createAdvancedEffect === 'function') {
-                    this.particleSystem.createAdvancedEffect('energy_burst', x, y, energy / 100);
-                }
-            } catch (error) {
-                console.warn('Collision effect error:', error);
-            }
-        };
-
-        return handleOptimizedCollisions(validBodies, this.config.COLLISION_SENSITIVITY, collisionCallback, this.time);
     }
 
     renderBodies() {
@@ -288,5 +343,69 @@ export class Simulation {
                 }
             }
         }
+    }
+
+    handleCollisionsWrapper(validBodies) {
+        const collisionCallback = (x, y, color1, color2, energy = 1) => {
+            if (!this.particleSystem) return;
+
+            try {
+                if (typeof this.particleSystem.createCollisionEffect === 'function') {
+                    this.particleSystem.createCollisionEffect(x, y, color1, color2, energy);
+                }
+                if (energy > 50 && typeof this.particleSystem.createAdvancedEffect === 'function') {
+                    this.particleSystem.createAdvancedEffect('energy_burst', x, y, energy / 100);
+                }
+            } catch (error) {
+                console.warn('Collision effect error:', error);
+            }
+        };
+
+        return handleOptimizedCollisions(validBodies, this.config.COLLISION_SENSITIVITY, collisionCallback, this.time);
+    }
+
+    handleWorkerMessage(e) {
+        if (e.data.error) {
+            console.error('Worker error:', e.data.error);
+            this.isPhysicsProcessing = false;
+            return;
+        }
+
+        const { bodies: workerBodies, events } = e.data;
+
+        // Create a map of returned bodies for O(1) lookup
+        const workerBodyMap = new Map(workerBodies.map(b => [b.id, b]));
+
+        // Update existing bodies and remove those that are missing from worker response
+        // BUT only if they were actually sent to the worker.
+        this.bodies = this.bodies.filter(body => {
+            if (workerBodyMap.has(body.id)) {
+                // Update body properties from worker
+                Object.assign(body, workerBodyMap.get(body.id));
+                return true;
+            } else {
+                // Body is missing from worker response.
+                // If it was sent to worker, it means it was destroyed (e.g. collision). Remove it.
+                // If it was NOT sent to worker, it means it's a new body added locally. Keep it.
+                if (this.sentBodyIds && this.sentBodyIds.has(body.id)) {
+                    return false; // Destroyed
+                } else {
+                    return true; // New body, keep it
+                }
+            }
+        });
+
+        // Handle events
+        if (events) {
+            events.forEach(event => {
+                if (event.type === 'collision') {
+                    if (this.particleSystem) {
+                        this.particleSystem.createCollisionEffect(event.x, event.y, event.color1, event.color2, event.energy);
+                    }
+                }
+            });
+        }
+
+        this.isPhysicsProcessing = false;
     }
 }

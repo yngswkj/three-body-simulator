@@ -49,13 +49,15 @@ export class ParticleSystem {
     constructor() {
         this.particles = [];
         this.maxParticles = 200; // ★ レガシーパーティクルの最大数を制限
-        
+
         // 新しい高度なパーティクルシステム
         this.advancedSystem = new AdvancedParticleSystem();
         this.useAdvancedEffects = true;
-        
+
         // ★ グローバル参照を設定（泡の破片生成用）
-        window.particleSystem = this;
+        if (typeof window !== 'undefined') {
+            window.particleSystem = this;
+        }
     }
 
     /**
@@ -78,10 +80,10 @@ export class ParticleSystem {
             console.warn('パーティクル生成: 無効な座標', x, y);
             return;
         }
-        
+
         // ★ パフォーマンス最適化：パーティクル数を大幅制限
         const particleCount = Math.min(8, Math.max(3, Math.floor(Math.sqrt(energy) / 3)));
-        
+
         // 多数のパーティクルを生成
         for (let i = 0; i < particleCount; i++) {
             const angle = (Math.PI * 2 * i) / particleCount;
@@ -122,7 +124,7 @@ export class ParticleSystem {
                 this.particles.splice(i, 1);
             }
         }
-        
+
         // 高度なパーティクルシステムの更新
         if (this.useAdvancedEffects) {
             const deltaTime = 16; // 約60FPS
@@ -156,14 +158,14 @@ export class ParticleSystem {
             this.advancedSystem.clear();
         }
     }
-    
+
     /**
      * 全パーティクルクリア（別名メソッド）
      */
     clearAll() {
         this.clear();
     }
-    
+
     /**
      * 高度なエフェクトの生成
      */
@@ -172,7 +174,7 @@ export class ParticleSystem {
             this.advancedSystem.createEffect(type, ...args);
         }
     }
-    
+
     /**
      * 高度なエフェクトのON/OFF
      */
@@ -180,7 +182,7 @@ export class ParticleSystem {
         this.useAdvancedEffects = enabled;
         console.log(`🎨 高度なパーティクルエフェクト: ${enabled ? '有効' : '無効'}`);
     }
-    
+
     /**
      * パーティクル品質設定
      */

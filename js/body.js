@@ -9,6 +9,9 @@ import { evolutionSystem } from './evolution-system.js';
  */
 export class Body {
     constructor(x, y, vx = 0, vy = 0, mass = 25, particleSystem = null) {
+        // ID for worker synchronization
+        this.id = Math.random().toString(36).substr(2, 9);
+
         // 基本物理パラメータ
         this.x = x;
         this.y = y;
